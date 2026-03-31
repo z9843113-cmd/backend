@@ -1,4 +1,4 @@
-const { pool } = require('../database');
+const { pool } = require('../database/index');
 
 const getUpiApps = async (req, res) => {
   const apps = await pool.query('SELECT * FROM "UPIApp" WHERE isactive = true');

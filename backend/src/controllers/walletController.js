@@ -1,4 +1,4 @@
-const { pool } = require('../database');
+const { pool } = require('../database/index');
 
 const getWallet = async (req, res) => {
   try {

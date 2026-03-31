@@ -1,4 +1,4 @@
-const { pool } = require('../database');
+const { pool } = require('../database/index');
 
 const createWithdrawal = async (req, res) => {
   const { amount, method, upiId, bankAccountId } = req.body;

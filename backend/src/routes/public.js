@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { getUpiApps, getCryptoAddresses } = require('../controllers/publicController');
-const { pool } = require('../database');
+const { pool } = require('../database/index');
 const { sendOtp } = require('../utils/email');
 const crypto = require('crypto');
 

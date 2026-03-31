@@ -1,6 +1,6 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { pool } = require('../database');
+const { pool } = require('../database/index');
 const { sendOtp } = require('../utils/email');
 const { generateReferralCode, generateOtp } = require('../utils/helpers');
 
