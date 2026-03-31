@@ -142,12 +142,15 @@ const getUpiVerificationStatus = async (req, res) => {
 
 const addUpi = async (req, res) => {
   try {
+    console.log('addUpi called, user:', req.user.id);
     const { upiId, appId } = req.body;
     if (!upiId) return res.status(400).json({ error: 'UPI ID required' });
     const existing = await pool.query('SELECT * FROM "UPIAccount" WHERE userid = $1 AND upiid = $2', [req.user.id, upiId.toLowerCase()]);
+    console.log('Existing check:', existing.rows.length);
     if (existing.rows.length > 0) return res.status(400).json({ error: 'UPI already added' });
     
     const result = await pool.query(`INSERT INTO "UPIAccount" (userid, upiid, appid, isactive, status, createdat) VALUES ($1, $2, $3, true, 'active', NOW()) RETURNING *`, [req.user.id, upiId.toLowerCase(), appId || null]);
+    console.log('Insert result:', result.rows[0]);
     
     let rewardGiven = false;
     let rewardAmount = 0;
@@ -157,13 +160,14 @@ const addUpi = async (req, res) => {
       const settings = await pool.query('SELECT * FROM "Settings" LIMIT 1');
       rewardAmount = settings.rows[0]?.upirewardamount || 20;
       await pool.query('UPDATE "Wallet" SET inrbalance = inrbalance + $1 WHERE userid = $2', [rewardAmount, req.user.id]);
-      await pool.query(`INSERT INTO Transaction (userid, type, amount, status, createdat) VALUES ($1, 'REWARD', $2, 'COMPLETED', NOW())`, [req.user.id, rewardAmount]);
+      await pool.query(`INSERT INTO "Transaction" (userid, type, amount, status, createdat) VALUES ($1, 'REWARD', $2, 'COMPLETED', NOW())`, [req.user.id, rewardAmount]);
       rewardGiven = true;
     }
     
     res.json({ message: 'UPI added', upiAccount: result.rows[0], rewardGiven, rewardAmount });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to add UPI' });
+    console.error('addUpi error:', error);
+    res.status(500).json({ error: 'Failed to add UPI: ' + error.message });
   }
 };
 
@@ -174,21 +178,30 @@ const getUpiAccounts = async (req, res) => {
 
 const setPrimaryUpi = async (req, res) => {
   try {
+    console.log('setPrimaryUpi called, user:', req.user.id, 'upiId:', req.body.upiId);
     const { upiId } = req.body;
     await pool.query('UPDATE "UPIAccount" SET isprimary = false WHERE userid = $1', [req.user.id]);
+    console.log('Cleared primary for user');
     await pool.query('UPDATE "UPIAccount" SET isprimary = true WHERE id = $1', [upiId]);
+    console.log('Set primary for upi');
     
     const reward = await pool.query('SELECT * FROM "Reward" WHERE userid = $1', [req.user.id]);
+    console.log('Reward check:', reward.rows[0]);
     if (reward.rows.length === 0 || !reward.rows[0].upirewardgiven) {
       const settings = await pool.query('SELECT * FROM "Settings" LIMIT 1');
       const amount = settings.rows[0]?.upirewardamount || 50;
-      await pool.query('UPDATE Wallet SET inrbalance = "inrBalance" + $1 WHERE userid = $2', [amount, req.user.id]);
+      console.log('Giving reward:', amount);
+      console.log('Wallet table name test');
+      await pool.query('UPDATE "Wallet" SET inrbalance = inrbalance + $1 WHERE userid = $2', [amount, req.user.id]);
+      console.log('Wallet updated');
       await pool.query('UPDATE "Reward" SET upirewardgiven = true WHERE userid = $1', [req.user.id]);
-      await pool.query(`INSERT INTO Transaction (userid, type, amount, status, createdat) VALUES ($1, 'REWARD', $2, 'COMPLETED', NOW())`, [req.user.id, amount]);
+      await pool.query(`INSERT INTO "Transaction" (userid, type, amount, status, createdat) VALUES ($1, 'REWARD', $2, 'COMPLETED', NOW())`, [req.user.id, amount]);
+      console.log('All reward operations done');
     }
     res.json({ message: 'Primary UPI set' });
   } catch (error) {
-    res.status(500).json({ error: 'Failed' });
+    console.error('setPrimaryUpi error:', error);
+    res.status(500).json({ error: 'Failed: ' + error.message });
   }
 };
 
@@ -212,7 +225,7 @@ const addBank = async (req, res) => {
       const settings = await pool.query('SELECT * FROM "Settings" LIMIT 1');
       rewardAmount = settings.rows[0]?.bankrewardamount || 20;
       await pool.query('UPDATE "Wallet" SET inrbalance = inrbalance + $1 WHERE userid = $2', [rewardAmount, req.user.id]);
-      await pool.query(`INSERT INTO Transaction (userid, type, amount, status, createdat) VALUES ($1, 'REWARD', $2, 'COMPLETED', NOW())`, [req.user.id, rewardAmount]);
+      await pool.query(`INSERT INTO "Transaction" (userid, type, amount, status, createdat) VALUES ($1, 'REWARD', $2, 'COMPLETED', NOW())`, [req.user.id, rewardAmount]);
       rewardGiven = true;
     }
     
@@ -237,9 +250,9 @@ const setPrimaryBank = async (req, res) => {
     if (reward.rows.length === 0 || !reward.rows[0].bankrewardgiven) {
       const settings = await pool.query('SELECT * FROM "Settings" LIMIT 1');
       const amount = settings.rows[0]?.bankrewardamount || 100;
-      await pool.query('UPDATE Wallet SET inrbalance = "inrBalance" + $1 WHERE userid = $2', [amount, req.user.id]);
+      await pool.query('UPDATE "Wallet" SET inrbalance = inrbalance + $1 WHERE userid = $2', [amount, req.user.id]);
       await pool.query('UPDATE "Reward" SET bankrewardgiven = true WHERE userid = $1', [req.user.id]);
-      await pool.query(`INSERT INTO Transaction (userid, type, amount, status, createdat) VALUES ($1, 'REWARD', $2, 'COMPLETED', NOW())`, [req.user.id, amount]);
+      await pool.query(`INSERT INTO "Transaction" (userid, type, amount, status, createdat) VALUES ($1, 'REWARD', $2, 'COMPLETED', NOW())`, [req.user.id, amount]);
     }
     res.json({ message: 'Primary bank set' });
   } catch (error) {
@@ -270,7 +283,7 @@ const bindMobile = async (req, res) => {
     
     if (!alreadyHasMobile) {
       await pool.query('UPDATE "Wallet" SET inrbalance = inrbalance + $1 WHERE userid = $2', [rewardAmount, req.user.id]);
-      await pool.query(`INSERT INTO Transaction (userid, type, amount, status, createdat) VALUES ($1, 'MOBILE_BIND', $2, 'COMPLETED', NOW())`, [req.user.id, rewardAmount]);
+      await pool.query(`INSERT INTO "Transaction" (userid, type, amount, status, createdat) VALUES ($1, 'MOBILE_BIND', $2, 'COMPLETED', NOW())`, [req.user.id, rewardAmount]);
       rewardGiven = true;
     }
     
@@ -355,7 +368,7 @@ const bindTelegram = async (req, res) => {
       const settings = await pool.query('SELECT * FROM "Settings" LIMIT 1');
       rewardAmount = settings.rows[0]?.telegramrewardamount || 20;
       await pool.query('UPDATE "Wallet" SET inrbalance = inrbalance + $1 WHERE userid = $2', [rewardAmount, req.user.id]);
-      await pool.query(`INSERT INTO Transaction (userid, type, amount, status, createdat) VALUES ($1, 'REWARD', $2, 'COMPLETED', NOW())`, [req.user.id, rewardAmount]);
+      await pool.query(`INSERT INTO "Transaction" (userid, type, amount, status, createdat) VALUES ($1, 'REWARD', $2, 'COMPLETED', NOW())`, [req.user.id, rewardAmount]);
       rewardGiven = true;
     }
     

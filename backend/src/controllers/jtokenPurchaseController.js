@@ -60,6 +60,9 @@ const createJTokenPurchase = async (req, res) => {
     if (!app.rows[0].isactive) {
       return res.status(400).json({ error: 'Selected payment method is not active' });
     }
+    if (!app.rows[0].isforjtoken) {
+      return res.status(400).json({ error: 'JToken payment method not configured. Please contact support.' });
+    }
     if (app.rows.length === 0) {
       return res.status(400).json({ error: 'Selected payment method is not available' });
     }

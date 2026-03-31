@@ -245,18 +245,19 @@ const getAllWithdrawals = async (req, res) => {
 const approveWithdrawal = async (req, res) => {
   const client = await pool.connect();
   try {
+    console.log('approveWithdrawal called with params:', req.params);
     await client.query('BEGIN');
     const w = await client.query('SELECT * FROM "Withdrawal" WHERE id = $1', [req.params.withdrawalId]);
+    console.log('Approve withdrawal - found:', w.rows.length, 'status:', w.rows[0]?.status);
     if (w.rows.length > 0 && w.rows[0].status === 'PENDING') {
       await client.query('UPDATE "Withdrawal" SET status = $1 WHERE id = $2 AND status = $3', ['APPROVED', req.params.withdrawalId, 'PENDING']);
-      await client.query('UPDATE "Transaction" SET status = $1 WHERE userid = (SELECT userid FROM Withdrawal WHERE id = $2) AND type = $3', ['COMPLETED', req.params.withdrawalId, 'WITHDRAW']);
     }
     await client.query('COMMIT');
     res.json({ message: 'Approved' });
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('Approve withdrawal error:', error);
-    res.status(500).json({ error: 'Failed to approve withdrawal' });
+    res.status(500).json({ error: 'Failed to approve withdrawal: ' + error.message });
   } finally {
     client.release();
   }
@@ -267,16 +268,17 @@ const rejectWithdrawal = async (req, res) => {
   try {
     await client.query('BEGIN');
     const w = await client.query('SELECT * FROM "Withdrawal" WHERE id = $1', [req.params.withdrawalId]);
+    console.log('Reject withdrawal - found:', w.rows.length);
     if (w.rows.length > 0 && w.rows[0].status === 'PENDING') {
       await client.query('UPDATE "Withdrawal" SET status = $1 WHERE id = $2', ['REJECTED', req.params.withdrawalId]);
-      await client.query('UPDATE Wallet SET "inrBalance" = "inrBalance" + $1 WHERE userid = $2', [parseFloat(w.rows[0].amount), w.rows[0].userid]);
+      await client.query('UPDATE "Wallet" SET inrbalance = inrbalance + $1 WHERE userid = $2', [parseFloat(w.rows[0].amount), w.rows[0].userid]);
     }
     await client.query('COMMIT');
     res.json({ message: 'Rejected' });
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('Reject withdrawal error:', error);
-    res.status(500).json({ error: 'Failed to reject withdrawal' });
+    res.status(500).json({ error: 'Failed to reject withdrawal: ' + error.message });
   } finally {
     client.release();
   }
@@ -288,9 +290,9 @@ const getAllUpiApps = async (req, res) => {
 };
 
 const createUpiApp = async (req, res) => {
-  const { name, iconUrl } = req.body;
+  const { name, iconUrl, isForJToken } = req.body;
   const id = name.toLowerCase().replace(/\s+/g, '-');
-  await pool.query(`INSERT INTO "UPIApp" (id, name, iconurl, isactive) VALUES ($1, $2, $3, true) ON CONFLICT (id) DO NOTHING`, [id, name, iconUrl || null]);
+  await pool.query(`INSERT INTO "UPIApp" (id, name, iconurl, isactive, isforjtoken) VALUES ($1, $2, $3, true, $4) ON CONFLICT (id) DO UPDATE SET isforjtoken = $4`, [id, name, iconUrl || null, isForJToken || false]);
   res.json({ message: 'Created' });
 };
 
@@ -417,7 +419,7 @@ const updateUpiApp = async (req, res) => {
   if (name !== undefined) { i++; params.push(name); fields.push(`name = $${i}`); }
   if (iconUrl !== undefined) { i++; params.push(iconUrl); fields.push(`iconurl = $${i}`); }
   if (isActive !== undefined) { i++; params.push(isActive); fields.push(`isactive = $${i}`); }
-  if (isForJToken !== undefined) { i++; params.push(isForJToken); fields.push(`"isForJToken" = $${i}`); }
+  if (isForJToken !== undefined) { i++; params.push(isForJToken); fields.push(`isforjtoken = $${i}`); }
   if (fields.length > 0) {
     params.push(id);
     await pool.query(`UPDATE "UPIApp" SET ${fields.join(', ')} WHERE id = $${i + 1}`, params);
@@ -586,9 +588,9 @@ const approveJTokenPurchase = async (req, res) => {
     }
 
     await client.query('UPDATE "JTokenPurchase" SET status = $2, reviewedat = NOW(), updatedat = NOW() WHERE id = $1', [req.params.purchaseId, 'APPROVED']);
-    await client.query('UPDATE Wallet SET "tokenBalance" = "tokenBalance" + $1 WHERE userid = $2', [row.tokenamount, row.userid]);
+    await client.query('UPDATE "Wallet" SET tokenbalance = tokenbalance + $1 WHERE userid = $2', [row.tokenamount, row.userid]);
     await client.query(
-      `INSERT INTO Transaction (userid, type, amount, tokenamount, inrvalue, note, status, createdat)
+      `INSERT INTO "Transaction" (userid, type, amount, tokenamount, inrvalue, note, status, createdat)
        VALUES ($1, 'JTOKEN_PURCHASE', $2, $3, $4, $5, 'COMPLETED', NOW())`,
       [row.userid, row.amount, row.tokenamount, row.amount, `Purchased J Token via ${row.method}`]
     );
@@ -648,11 +650,11 @@ const updateUserJToken = async (req, res) => {
 
     let wallet = await client.query('SELECT * FROM "Wallet" WHERE userid = $1', [userId]);
     if (wallet.rows.length === 0) {
-      wallet = await client.query(`INSERT INTO Wallet (userid, usdtbalance, inrbalance, tokenbalance, referralbalance) VALUES ($1, 0, 0, 0, 0) RETURNING *`, [userId]);
+      wallet = await client.query(`INSERT INTO "Wallet" (userid, usdtbalance, inrbalance, tokenbalance, referralbalance) VALUES ($1, 0, 0, 0, 0) RETURNING *`, [userId]);
     }
 
     const currentWallet = wallet.rows[0];
-    if (action === 'DEBIT' && parseFloat(currentWallet.tokenBalance || 0) < parsedAmount) {
+    if (action === 'DEBIT' && parseFloat(currentWallet.tokenbalance || 0) < parsedAmount) {
       await client.query('ROLLBACK');
       return res.status(400).json({ error: 'Insufficient J Token balance' });
     }
@@ -662,9 +664,9 @@ const updateUserJToken = async (req, res) => {
     const inrValue = parsedAmount * tokenRate;
     const signedAmount = action === 'CREDIT' ? parsedAmount : -parsedAmount;
 
-    await client.query('UPDATE Wallet SET "tokenBalance" = "tokenBalance" + $1 WHERE userid = $2', [signedAmount, userId]);
+    await client.query('UPDATE "Wallet" SET tokenbalance = tokenbalance + $1 WHERE userid = $2', [signedAmount, userId]);
     await client.query(
-      `INSERT INTO Transaction (userid, type, amount, tokenamount, inrvalue, note, status, createdat)
+      `INSERT INTO "Transaction" (userid, type, amount, tokenamount, inrvalue, note, status, createdat)
        VALUES ($1, $2, $3, $4, $5, $6, 'COMPLETED', NOW())`,
       [userId, action === 'CREDIT' ? 'JTOKEN_CREDIT' : 'JTOKEN_DEBIT', parsedAmount, parsedAmount, inrValue, note || `${action} J Token by admin`]
     );

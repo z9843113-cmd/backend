@@ -86,12 +86,15 @@ router.get('/upi-apps', getUpiApps);
 router.get('/crypto-addresses', getCryptoAddresses);
 
 router.get('/crypto-rates', async (req, res) => {
+  console.log('CRYPTO-RATES ENDPOINT HIT - timestamp:', Date.now());
   try {
     const coins = 'bitcoin,ethereum,tether,binancecoin,solana,ripple,dogecoin,cardano,polkadot,avalanche-2,chainlink,polygon';
     const response = await fetch(
-      `https://api.coingecko.com/api/v3/simple/price?ids=${coins}&vs_currencies=inr,usd&include_24hr_change=true&include_last_updated_at=true`
+      `https://api.coingecko.com/api/v3/simple/price?ids=${coins}&vs_currencies=inr,usd&include_24hr_change=true&include_last_updated_at=true&_=${Date.now()}`
     );
+    console.log('CoinGecko response status:', response.status);
     const data = await response.json();
+    console.log('CoinGecko data keys:', Object.keys(data).slice(0,5));
     const result = Object.entries(data).map(([id, values]) => ({
       id,
       inr: values.inr,
@@ -107,9 +110,39 @@ router.get('/crypto-rates', async (req, res) => {
   }
 });
 
+router.get('/rates', async (req, res) => {
+  console.log('RATES ENDPOINT HIT - timestamp:', Date.now());
+  try {
+    const coins = 'bitcoin,ethereum,tether,binancecoin,solana,ripple,dogecoin,cardano,polkadot,avalanche-2,chainlink,polygon';
+    const response = await fetch(
+      `https://api.coingecko.com/api/v3/simple/price?ids=${coins}&vs_currencies=inr,usd&include_24hr_change=true&include_last_updated_at=true&t=${Date.now()}`
+    );
+    console.log('CoinGecko response status:', response.status);
+    const data = await response.json();
+    console.log('CoinGecko data keys:', Object.keys(data).slice(0,5));
+    const result = Object.entries(data).map(([id, values]) => ({
+      id,
+      inr: values.inr,
+      usd: values.usd,
+      inr_24h_change: values.inr_24h_change,
+      usd_24h_change: values.usd_24h_change,
+      last_updated_at: values.last_updated_at
+    }));
+    res.json(result);
+  } catch (error) {
+    console.error('Rates error:', error.message);
+    res.status(500).json({ error: 'Failed to fetch rates' });
+  }
+});
+
 router.get('/recent-trades', async (req, res) => {
   console.log('RECENT-TRADES ROUTE HIT');
   try {
+    // Add cache buster to prevent caching
+    const noCache = req.query._ || req.query.t;
+    if (noCache) {
+      console.log('Recent trades cache bust:', noCache);
+    }
     const transactions = await pool.query(`
       SELECT * FROM "Transaction" 
       WHERE status = 'COMPLETED' 

@@ -38,6 +38,16 @@ router.post('/test-login', async (req, res) => {
       console.log('Wallet may already exist:', walletErr.message);
     }
     
+    // Create reward record
+    try {
+      await pool.query(
+        `INSERT INTO "Reward" (userid, upirewardgiven, bankrewardgiven, telegramrewardgiven) VALUES ($1, false, false, false)`,
+        [user.id]
+      );
+    } catch (rewardErr) {
+      console.log('Reward may already exist:', rewardErr.message);
+    }
+    
     res.json({ token, user: { id: user.id, email: user.email, name: user.name } });
   } catch (error) {
     console.error('Test login error:', error.message);

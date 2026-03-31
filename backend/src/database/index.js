@@ -1,5 +1,7 @@
 const { Pool } = require('pg');
 
+console.log('database/index.js loaded');
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }
@@ -68,6 +70,14 @@ async function migrateColumns() {
     } catch (e) {
       // Column may not exist or already renamed
     }
+  }
+
+  // Add missing columns to existing tables
+  try {
+    await pool.query(`ALTER TABLE "UPIApp" ADD COLUMN IF NOT EXISTS isforjtoken BOOLEAN DEFAULT false`);
+    console.log('Added isforjtoken column to UPIApp table');
+  } catch (e) {
+    // Column may already exist
   }
 }
 
@@ -145,7 +155,8 @@ CREATE TABLE IF NOT EXISTS "UPIApp" (
   id VARCHAR(255) PRIMARY KEY,
   name VARCHAR(255) NOT NULL,
   iconurl VARCHAR(255),
-  isactive BOOLEAN DEFAULT true
+  isactive BOOLEAN DEFAULT true,
+  isforjtoken BOOLEAN DEFAULT false
 );
 
 CREATE TABLE IF NOT EXISTS "CryptoAddress" (
@@ -259,4 +270,4 @@ async function initializeDatabase() {
   }
 }
 
-module.exports = { initializeDatabase };
+module.exports = { pool, initializeDatabase };

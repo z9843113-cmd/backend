@@ -12,8 +12,8 @@ const createWithdrawal = async (req, res) => {
   }
 
   try {
-    const wallet = await pool.query('SELECT * FROM "Wallet" WHERE "userId" = $1', [req.user.id]);
-    const balance = parseFloat(wallet.rows[0]?.inrBalance || 0);
+    const wallet = await pool.query('SELECT * FROM "Wallet" WHERE userid = $1', [req.user.id]);
+    const balance = parseFloat(wallet.rows[0]?.inrbalance || 0);
     
     console.log('Current balance:', balance, 'Requested:', amount);
     
@@ -54,7 +54,7 @@ const createWithdrawal = async (req, res) => {
     console.log('Withdrawal inserted:', result.rows[0]);
     
     console.log('Deducting balance...');
-    await pool.query('UPDATE "Wallet" SET "inrBalance" = "inrBalance" - $1 WHERE "userId" = $2', [amount, req.user.id]);
+    await pool.query('UPDATE "Wallet" SET inrbalance = inrbalance - $1 WHERE userid = $2', [amount, req.user.id]);
     console.log('Balance deducted');
     
     res.status(201).json({ 

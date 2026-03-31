@@ -83,7 +83,7 @@ const verifyOtp = async (req, res) => {
     const u = user.rows[0];
 
     // Create wallet
-    await pool.query(`INSERT INTO "Wallet" ("userId", "usdtBalance", "inrBalance", "tokenBalance") VALUES ($1, 0, 0, 0)`, [u.id]);
+    await pool.query(`INSERT INTO "Wallet" (userid, usdtbalance, inrbalance, tokenbalance) VALUES ($1, 0, 0, 0)`, [u.id]);
     
     // Create reward record
     await pool.query(`INSERT INTO "Reward" (userid, upirewardgiven, bankrewardgiven, telegramrewardgiven) VALUES ($1, false, false, false)`, [u.id]);
