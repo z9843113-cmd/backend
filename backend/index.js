@@ -155,6 +155,19 @@ app.get('/ping', (req, res) => res.sendStatus(200));
 
 app.get('/api/test', (req, res) => res.json({ message: 'Server is working' }));
 
+// TEMPORARY DEBUG - remove after fixing
+app.get('/api/debug-db', async (req, res) => {
+  const dbUrl = process.env.DATABASE_URL || 'NOT SET';
+  // Mask password but show host/structure
+  const masked = dbUrl.replace(/:([^@]+)@/, ':***@');
+  try {
+    const result = await pool.query('SELECT 1 as test');
+    res.json({ dbUrl: masked, connected: true, result: result.rows[0] });
+  } catch (err) {
+    res.json({ dbUrl: masked, connected: false, error: err.message, code: err.code });
+  }
+});
+
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ error: 'Something went wrong!' });
