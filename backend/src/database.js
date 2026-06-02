@@ -2,11 +2,17 @@ require('dotenv').config();
 const { Pool } = require('pg');
 
 let connectionString = process.env.DATABASE_URL || '';
-const isNeonPooler = connectionString.includes('neon.tech') && connectionString.includes('-pooler');
+const hasPooler = connectionString.includes('-pooler');
 
-if (isNeonPooler) {
+if (hasPooler) {
   connectionString = connectionString.replace('-pooler', '');
 }
+
+// Log masked connection string for diagnostics
+try {
+  const masked = connectionString.replace(/:([^@]+)@/, ':***@');
+  console.log('🔌 Connecting to DB:', masked);
+} catch (err) {}
 
 const pool = new Pool({
   connectionString,

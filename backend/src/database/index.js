@@ -2,14 +2,20 @@ const { Pool } = require('pg');
 
 console.log('database/index.js loaded');
 
-// Parse DATABASE_URL and auto-convert Neon pooler URL to direct URL to bypass PgBouncer limitations
+// Parse DATABASE_URL and auto-convert pooler URL to direct URL to bypass PgBouncer limitations
 let connectionString = process.env.DATABASE_URL || '';
-const isNeonPooler = connectionString.includes('neon.tech') && connectionString.includes('-pooler');
+const hasPooler = connectionString.includes('-pooler');
 
-if (isNeonPooler) {
-  console.log('🔄 Detected Neon pooler URL. Auto-converting to Direct Connection URL to prevent PgBouncer connection drops.');
+if (hasPooler) {
+  console.log('🔄 Detected pooler URL. Auto-converting to Direct Connection URL to prevent PgBouncer connection drops.');
   connectionString = connectionString.replace('-pooler', '');
 }
+
+// Log masked connection string for diagnostics
+try {
+  const masked = connectionString.replace(/:([^@]+)@/, ':***@');
+  console.log('🔌 Connecting to DB:', masked);
+} catch (err) {}
 
 const pool = new Pool({
   connectionString,
