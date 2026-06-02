@@ -2,15 +2,18 @@ const { Pool } = require('pg');
 
 console.log('database/index.js loaded');
 
+// Create pool with conservative settings for Render free tier + PgBouncer
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   max: 2,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000,
   ssl: { rejectUnauthorized: false }
 });
 
-// Avoid node crash on unexpected idle client drops (e.g. PgBouncer disconnects)
+// Prevent unhandled pool errors from crashing the Node process
 pool.on('error', (err) => {
-  console.error('⚠️ Unexpected pool client error:', err.message);
+  console.error('⚠️ Unexpected pool client error (handled):', err.message);
 });
 
 async function migrateColumns() {
@@ -184,9 +187,12 @@ const bcrypt = require('bcryptjs');
 async function initializeDatabase() {
   console.log('🔄 Initializing database...');
   
-  // 1. Verify connection first (with retries to handle temporary PgBouncer limit exhaustion)
+  // 1. Verify connection with retries (10 attempts x 3 seconds = 30 seconds total)
+  // Render zero-downtime deploys keep the old container alive for ~30s,
+  // so we need to wait long enough for it to release its connections.
   let dbConnected = false;
-  const maxRetries = 5;
+  const maxRetries = 10;
+  const retryDelay = 3000;
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       await pool.query('SELECT 1');
@@ -196,16 +202,16 @@ async function initializeDatabase() {
     } catch (connectionError) {
       console.warn(`⚠️ Database connection attempt ${attempt}/${maxRetries} failed: ${connectionError.message}`);
       if (attempt < maxRetries) {
-        console.log(`🔄 Retrying in 2 seconds...`);
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        console.log(`🔄 Retrying in ${retryDelay/1000} seconds...`);
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
       }
     }
   }
 
   if (!dbConnected) {
-    console.error('❌ Database connection failed after all attempts. Unreachable or temporarily exhausted.');
-    console.log('⚠️ Bypassing schema creation/seeding and continuing server startup anyway to allow Render to transition.');
-    return true; // Return true to allow server start; once the old container stops, connections will free up!
+    console.error('❌ Database connection failed after all attempts.');
+    console.log('⚠️ Starting server anyway — database queries will auto-reconnect when connections free up.');
+    return true; // Let server start; pg Pool automatically retries on next query
   }
 
   // 2. Try to run schema creation and migrations
@@ -217,7 +223,6 @@ async function initializeDatabase() {
         try {
           await pool.query(stmt);
         } catch (queryErr) {
-          // Log but don't crash for table/relation conflicts
           console.log('ℹ️ Table init statement skipped or already exists:', stmt.substring(0, 50).trim());
         }
       }
@@ -272,8 +277,8 @@ async function initializeDatabase() {
     console.log('✅ Database initialization complete!');
     return true;
   } catch (error) {
-    console.warn('⚠️ Warning: Database initialization threw an error but connection is verified. Continuing startup:', error.message);
-    return true; // Return true because DB connection works, and tables already exist!
+    console.warn('⚠️ Warning: Database initialization threw an error but continuing startup:', error.message);
+    return true;
   }
 }
 
