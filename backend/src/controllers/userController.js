@@ -10,7 +10,7 @@ const auth = async (req, res, next) => {
     }
     const token = authHeader.split(' ')[1];
     const jwt = require('jsonwebtoken');
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'zcrypto_premium_earning_fallback_secret_key_2026');
     console.log('Auth - decoded:', decoded);
     const user = await pool.query('SELECT * FROM "User" WHERE id = $1', [decoded.userId]);
     console.log('Auth - user query result:', user.rows.length);

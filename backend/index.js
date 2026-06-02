@@ -64,6 +64,10 @@ try {
   app.use('/api/jtoken-purchase', require('./src/routes/jtokenPurchase'));
   console.log('✅ J Token purchase routes loaded');
 } catch(e) { console.error('❌ J Token purchase routes error:', e.message); }
+try {
+  app.use('/api/subadmin', require('./src/routes/subadmin'));
+  console.log('✅ Subadmin routes loaded');
+} catch(e) { console.error('❌ Subadmin routes error:', e.message); }
 console.log('Routes loaded');
 
 // Telegram Bot Integration

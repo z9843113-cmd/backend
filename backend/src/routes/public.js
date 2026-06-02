@@ -11,6 +11,7 @@ router.get('/test-hello', (req, res) => {
   res.json({ message: 'hello from public' });
 });
 
+/*
 router.get('/test-email', async (req, res) => {
   const email = req.query.email || 'amitxrajwar@gmail.com';
   const otp = '123456';
@@ -48,6 +49,7 @@ router.post('/fix-user-table', async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+*/
 
 router.post('/telegram/generate-key', async (req, res) => {
   try {

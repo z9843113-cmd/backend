@@ -324,7 +324,7 @@ const getSettings = async (req, res) => {
 };
 
 const updateSettings = async (req, res) => {
-  const { usdtRate, tokenRate, minJTokenBuy, referralPercent, jTokenCommissionPercent, usdtCommissionPercent, upiRewardAmount, bankRewardAmount, telegramRewardAmount, whatsappSupport, telegramSupport, telegramGroup, bannerEnabled, bannerTitle, bannerSubtitle, bannerButtonText, bannerLink } = req.body;
+  const { usdtRate, tokenRate, minJTokenBuy, referralPercent, jTokenCommissionPercent, usdtCommissionPercent, upiRewardAmount, bankRewardAmount, telegramRewardAmount, whatsappSupport, telegramSupport, telegramGroup, bannerEnabled, bannerTitle, bannerSubtitle, bannerButtonText, bannerLink, depositDiscountEnabled, depositDiscountPercent, jTokenDiscountEnabled } = req.body;
   const fields = [], params = [];
   let i = 0;
   if (usdtRate !== undefined) { i++; params.push(usdtRate); fields.push(`usdtrate = $${i}`); }
@@ -344,6 +344,9 @@ const updateSettings = async (req, res) => {
   if (bannerSubtitle !== undefined) { i++; params.push(bannerSubtitle); fields.push(`bannersubtitle = $${i}`); }
   if (bannerButtonText !== undefined) { i++; params.push(bannerButtonText); fields.push(`bannerbuttontext = $${i}`); }
   if (bannerLink !== undefined) { i++; params.push(bannerLink); fields.push(`bannerlink = $${i}`); }
+  if (depositDiscountEnabled !== undefined) { i++; params.push(depositDiscountEnabled); fields.push(`depositdiscountenabled = $${i}`); }
+  if (depositDiscountPercent !== undefined) { i++; params.push(depositDiscountPercent); fields.push(`depositdiscountpercent = $${i}`); }
+  if (jTokenDiscountEnabled !== undefined) { i++; params.push(jTokenDiscountEnabled); fields.push(`jtokendiscountenabled = $${i}`); }
   
   if (fields.length > 0) {
     params.push('default');

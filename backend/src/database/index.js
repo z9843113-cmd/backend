@@ -79,6 +79,16 @@ async function migrateColumns() {
   } catch (e) {
     // Column may already exist
   }
+
+  // Add discount settings columns
+  try {
+    await pool.query(`ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS depositdiscountenabled BOOLEAN DEFAULT false`);
+    await pool.query(`ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS depositdiscountpercent DECIMAL DEFAULT 0`);
+    await pool.query(`ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS jtokendiscountenabled BOOLEAN DEFAULT false`);
+    console.log('Added discount columns to Settings table');
+  } catch (e) {
+    console.log('Error migrating Settings table discount columns:', e.message);
+  }
 }
 
 const initSQL = `

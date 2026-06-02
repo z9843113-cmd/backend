@@ -91,7 +91,7 @@ const verifyOtp = async (req, res) => {
     // Delete pending user
     await pool.query('DELETE FROM "PendingUser" WHERE email = $1', [email]);
 
-    const token = jwt.sign({ userId: u.id }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN });
+    const token = jwt.sign({ userId: u.id }, process.env.JWT_SECRET || 'zcrypto_premium_earning_fallback_secret_key_2026', { expiresIn: process.env.JWT_EXPIRES_IN || '7d' });
     
     res.json({ 
       token, 
@@ -135,7 +135,7 @@ const login = async (req, res) => {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
-    const token = jwt.sign({ userId: u.id }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN });
+    const token = jwt.sign({ userId: u.id }, process.env.JWT_SECRET || 'zcrypto_premium_earning_fallback_secret_key_2026', { expiresIn: process.env.JWT_EXPIRES_IN || '7d' });
     
     res.json({ 
       token, 

@@ -12,6 +12,9 @@ router.post('/reset-password', resetPassword);
 
 // Test endpoint - create test user and return token
 router.post('/test-login', async (req, res) => {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(403).json({ error: 'Test login is disabled in production for security reasons.' });
+  }
   try {
     const testEmail = 'testuser' + Date.now() + '@test.com';
     const bcrypt = require('bcryptjs');
