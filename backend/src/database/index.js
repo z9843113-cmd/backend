@@ -181,7 +181,16 @@ async function initializeDatabase() {
   
   try {
     console.log('📦 Creating tables...');
-    await pool.query(initSQL);
+    const statements = initSQL.split(';').filter(s => s.trim());
+    for (const stmt of statements) {
+      if (stmt.trim()) {
+        try {
+          await pool.query(stmt);
+        } catch (queryErr) {
+          console.error('Error executing database init statement:', stmt.substring(0, 50), 'Error:', queryErr.message);
+        }
+      }
+    }
     console.log('✅ Tables created!');
     
     console.log('🔧 Migrating column names...');
