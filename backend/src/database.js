@@ -1,9 +1,16 @@
 require('dotenv').config();
 const { Pool } = require('pg');
 
+let connectionString = process.env.DATABASE_URL || '';
+const isNeonPooler = connectionString.includes('neon.tech') && connectionString.includes('-pooler');
+
+if (isNeonPooler) {
+  connectionString = connectionString.replace('-pooler', '');
+}
+
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  max: 2,
+  connectionString,
+  max: 5,
   ssl: { rejectUnauthorized: false }
 });
 

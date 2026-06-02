@@ -2,22 +2,21 @@ const { Pool } = require('pg');
 
 console.log('database/index.js loaded');
 
-// Parse DATABASE_URL to check if it's a pooler URL (Neon/Supabase)
-const dbUrl = process.env.DATABASE_URL || '';
-const isPoolerUrl = dbUrl.includes('pooler') || dbUrl.includes('pgbouncer');
-console.log('Database URL type:', isPoolerUrl ? 'Pooler (PgBouncer)' : 'Direct');
+// Parse DATABASE_URL and auto-convert Neon pooler URL to direct URL to bypass PgBouncer limitations
+let connectionString = process.env.DATABASE_URL || '';
+const isNeonPooler = connectionString.includes('neon.tech') && connectionString.includes('-pooler');
 
-// Conservative pool settings for Neon free tier + PgBouncer
+if (isNeonPooler) {
+  console.log('🔄 Detected Neon pooler URL. Auto-converting to Direct Connection URL to prevent PgBouncer connection drops.');
+  connectionString = connectionString.replace('-pooler', '');
+}
+
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  max: 1,                        // Single connection to avoid exhaustion
-  idleTimeoutMillis: 20000,      // Release idle connections after 20s
+  connectionString,
+  max: 5,                        // Increase connection pool since direct connection is stable and allows concurrent queries
+  idleTimeoutMillis: 30000,      // Release idle connections after 30s
   connectionTimeoutMillis: 30000, // Wait up to 30s for cold-start databases
-  ssl: { rejectUnauthorized: false },
-  // For PgBouncer compatibility: disable prepared statements
-  ...(isPoolerUrl ? { 
-    options: '-c statement_timeout=30000',
-  } : {})
+  ssl: { rejectUnauthorized: false }
 });
 
 // Prevent unhandled pool errors from crashing the Node process
