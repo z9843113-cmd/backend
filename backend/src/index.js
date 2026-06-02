@@ -6,7 +6,7 @@ const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const fetch = require('node-fetch');
 
-const { initializeDatabase, pool } = require('./database');
+const { initializeDatabase, pool } = require('./database/index');
 console.log('Database module loaded');
 
 const app = express();

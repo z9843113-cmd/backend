@@ -25,10 +25,26 @@ pool.on('error', (err) => {
   console.error('⚠️ Pool background error (handled):', err.message);
 });
 
+let isSchemaCreated = false;
+let isInitializing = false;
+
 // Override pool.query to auto-retry on transient connection failures
 // This way ALL controllers using pool.query automatically get retry behavior
 const originalQuery = pool.query.bind(pool);
 pool.query = async function retryQuery(...args) {
+  // If not initialized and not currently initializing, run initialization first
+  if (!isSchemaCreated && !isInitializing) {
+    isInitializing = true;
+    try {
+      console.log('🔄 Lazy-initializing database on first query...');
+      await initializeDatabase();
+    } catch (initErr) {
+      console.error('❌ Lazy-initialization failed:', initErr.message);
+    } finally {
+      isInitializing = false;
+    }
+  }
+
   const maxRetries = 3;
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -246,6 +262,7 @@ async function initializeDatabase() {
 
   // 2. Try to run schema creation and migrations
   try {
+    isSchemaCreated = true;
     console.log('📦 Creating tables...');
     const statements = initSQL.split(';').filter(s => s.trim());
     for (const stmt of statements) {
