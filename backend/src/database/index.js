@@ -8,6 +8,11 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
+// Avoid node crash on unexpected idle client drops (e.g. PgBouncer disconnects)
+pool.on('error', (err) => {
+  console.error('⚠️ Unexpected pool client error:', err.message);
+});
+
 async function migrateColumns() {
   const renames = [];
 
@@ -179,13 +184,28 @@ const bcrypt = require('bcryptjs');
 async function initializeDatabase() {
   console.log('🔄 Initializing database...');
   
-  // 1. Verify connection first
-  try {
-    await pool.query('SELECT 1');
-    console.log('✅ Database connection verified!');
-  } catch (connectionError) {
-    console.error('❌ Database connection failed. Unreachable:', connectionError.message);
-    return false; // Crucial error: DB is offline or URL is wrong
+  // 1. Verify connection first (with retries to handle temporary PgBouncer limit exhaustion)
+  let dbConnected = false;
+  const maxRetries = 5;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      await pool.query('SELECT 1');
+      console.log(`✅ Database connection verified on attempt ${attempt}!`);
+      dbConnected = true;
+      break;
+    } catch (connectionError) {
+      console.warn(`⚠️ Database connection attempt ${attempt}/${maxRetries} failed: ${connectionError.message}`);
+      if (attempt < maxRetries) {
+        console.log(`🔄 Retrying in 2 seconds...`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+    }
+  }
+
+  if (!dbConnected) {
+    console.error('❌ Database connection failed after all attempts. Unreachable or temporarily exhausted.');
+    console.log('⚠️ Bypassing schema creation/seeding and continuing server startup anyway to allow Render to transition.');
+    return true; // Return true to allow server start; once the old container stops, connections will free up!
   }
 
   // 2. Try to run schema creation and migrations
