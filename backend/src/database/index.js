@@ -2,19 +2,52 @@ const { Pool } = require('pg');
 
 console.log('database/index.js loaded');
 
-// Create pool with conservative settings for Render free tier + PgBouncer
+// Parse DATABASE_URL to check if it's a pooler URL (Neon/Supabase)
+const dbUrl = process.env.DATABASE_URL || '';
+const isPoolerUrl = dbUrl.includes('pooler') || dbUrl.includes('pgbouncer');
+console.log('Database URL type:', isPoolerUrl ? 'Pooler (PgBouncer)' : 'Direct');
+
+// Conservative pool settings for Neon free tier + PgBouncer
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  max: 2,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 10000,
-  ssl: { rejectUnauthorized: false }
+  max: 1,                        // Single connection to avoid exhaustion
+  idleTimeoutMillis: 20000,      // Release idle connections after 20s
+  connectionTimeoutMillis: 30000, // Wait up to 30s for cold-start databases
+  ssl: { rejectUnauthorized: false },
+  // For PgBouncer compatibility: disable prepared statements
+  ...(isPoolerUrl ? { 
+    options: '-c statement_timeout=30000',
+  } : {})
 });
 
 // Prevent unhandled pool errors from crashing the Node process
 pool.on('error', (err) => {
-  console.error('⚠️ Unexpected pool client error (handled):', err.message);
+  console.error('⚠️ Pool background error (handled):', err.message);
 });
+
+// Override pool.query to auto-retry on transient connection failures
+// This way ALL controllers using pool.query automatically get retry behavior
+const originalQuery = pool.query.bind(pool);
+pool.query = async function retryQuery(...args) {
+  const maxRetries = 3;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await originalQuery(...args);
+    } catch (err) {
+      const isTransient = err.message.includes('terminated unexpectedly') ||
+                          err.message.includes('Connection terminated') ||
+                          err.message.includes('ECONNREFUSED') ||
+                          err.message.includes('timeout expired') ||
+                          err.message.includes('connect ETIMEDOUT');
+      if (isTransient && attempt < maxRetries) {
+        console.warn(`⚠️ Query retry ${attempt}/${maxRetries}: ${err.message}`);
+        await new Promise(r => setTimeout(r, 2000));
+        continue;
+      }
+      throw err;
+    }
+  }
+};
 
 async function migrateColumns() {
   const renames = [];
@@ -187,22 +220,19 @@ const bcrypt = require('bcryptjs');
 async function initializeDatabase() {
   console.log('🔄 Initializing database...');
   
-  // 1. Verify connection with retries (10 attempts x 3 seconds = 30 seconds total)
-  // Render zero-downtime deploys keep the old container alive for ~30s,
-  // so we need to wait long enough for it to release its connections.
+  // 1. Verify connection with retries (15 attempts x 4 seconds = 60 seconds total)
   let dbConnected = false;
-  const maxRetries = 10;
-  const retryDelay = 3000;
+  const maxRetries = 15;
+  const retryDelay = 4000;
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      await pool.query('SELECT 1');
+      await originalQuery('SELECT 1');
       console.log(`✅ Database connection verified on attempt ${attempt}!`);
       dbConnected = true;
       break;
     } catch (connectionError) {
-      console.warn(`⚠️ Database connection attempt ${attempt}/${maxRetries} failed: ${connectionError.message}`);
+      console.warn(`⚠️ DB attempt ${attempt}/${maxRetries}: ${connectionError.message}`);
       if (attempt < maxRetries) {
-        console.log(`🔄 Retrying in ${retryDelay/1000} seconds...`);
         await new Promise(resolve => setTimeout(resolve, retryDelay));
       }
     }
@@ -210,8 +240,8 @@ async function initializeDatabase() {
 
   if (!dbConnected) {
     console.error('❌ Database connection failed after all attempts.');
-    console.log('⚠️ Starting server anyway — database queries will auto-reconnect when connections free up.');
-    return true; // Let server start; pg Pool automatically retries on next query
+    console.log('⚠️ Starting server — queries will auto-retry on first request.');
+    return true;
   }
 
   // 2. Try to run schema creation and migrations
@@ -223,13 +253,13 @@ async function initializeDatabase() {
         try {
           await pool.query(stmt);
         } catch (queryErr) {
-          console.log('ℹ️ Table init statement skipped or already exists:', stmt.substring(0, 50).trim());
+          console.log('ℹ️ Table init skipped:', stmt.substring(0, 50).trim());
         }
       }
     }
     console.log('✅ Tables initialization complete!');
     
-    console.log('🔧 Migrating column names...');
+    console.log('🔧 Migrating columns...');
     try {
       await migrateColumns();
       console.log('✅ Columns migrated!');
@@ -269,7 +299,7 @@ async function initializeDatabase() {
       await pool.query(`INSERT INTO "Wallet" (userid, usdtbalance, inrbalance, tokenbalance) SELECT id, 0, 0, 0 FROM "User" WHERE email = 'admin@premium.com' ON CONFLICT (userid) DO NOTHING`);
       await pool.query(`INSERT INTO "Reward" (userid, upirewardgiven, bankrewardgiven, telegramrewardgiven) SELECT id, false, false, false FROM "User" WHERE email = 'admin@premium.com' ON CONFLICT (userid) DO NOTHING`);
       
-      console.log('✅ Seed data and configurations verified!');
+      console.log('✅ Seed data verified!');
     } catch (seedErr) {
       console.log('ℹ️ Seed step skipped:', seedErr.message);
     }
@@ -277,7 +307,7 @@ async function initializeDatabase() {
     console.log('✅ Database initialization complete!');
     return true;
   } catch (error) {
-    console.warn('⚠️ Warning: Database initialization threw an error but continuing startup:', error.message);
+    console.warn('⚠️ DB init error but continuing:', error.message);
     return true;
   }
 }
