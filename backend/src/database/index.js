@@ -4,6 +4,7 @@ console.log('database/index.js loaded');
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
+  max: 2,
   ssl: { rejectUnauthorized: false }
 });
 
