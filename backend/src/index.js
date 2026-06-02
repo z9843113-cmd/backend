@@ -77,26 +77,52 @@ if (process.env.TELEGRAM_BOT_TOKEN) {
   
   console.log('🤖 Telegram Bot initializing...');
   
-  (async () => {
-    try {
-      await bot.deleteWebHook();
-      console.log('✅ Webhook cleared');
-    } catch (e) {}
+  const isProduction = !!process.env.RENDER_EXTERNAL_URL;
+  
+  if (isProduction) {
+    const webhookUrl = `${process.env.RENDER_EXTERNAL_URL}/api/telegram-webhook`;
+    console.log(`🤖 Telegram Bot setting webhook to: ${webhookUrl}`);
     
-    try {
-      await bot.close();
-      console.log('✅ Existing connection closed');
-    } catch (e) {}
-    
-    await new Promise(r => setTimeout(r, 1000));
-    
-    bot.startPolling({
-      interval: 1000,
-      timeout: 0,
-      allowedUpdates: ['message']
+    app.post('/api/telegram-webhook', (req, res) => {
+      try {
+        bot.processUpdate(req.body);
+      } catch (err) {
+        console.error('⚠️ Webhook processUpdate error:', err.message);
+      }
+      res.sendStatus(200);
     });
-    console.log('✅ Telegram Bot polling started!');
-  })();
+
+    (async () => {
+      try {
+        await bot.setWebHook(webhookUrl);
+        console.log('✅ Telegram Webhook set successfully!');
+      } catch (e) {
+        console.error('❌ Failed to set Telegram Webhook:', e.message);
+      }
+    })();
+  } else {
+    // Local development: use polling
+    (async () => {
+      try {
+        await bot.deleteWebHook();
+        console.log('✅ Webhook cleared (polling mode)');
+      } catch (e) {}
+      
+      try {
+        await bot.close();
+        console.log('✅ Existing connection closed');
+      } catch (e) {}
+      
+      await new Promise(r => setTimeout(r, 1000));
+      
+      bot.startPolling({
+        interval: 1000,
+        timeout: 0,
+        allowedUpdates: ['message']
+      });
+      console.log('✅ Telegram Bot polling started!');
+    })();
+  }
   
   bot.on('message', async (msg) => {
     const chatId = msg.chat.id;
