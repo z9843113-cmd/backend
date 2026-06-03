@@ -56,6 +56,7 @@ router.get('/users', auth, authorize('ADMIN', 'SUBADMIN'), getAllUsers);
 router.get('/user/:userId', auth, authorize('ADMIN', 'SUBADMIN'), getUserDetails);
 router.post('/user/:userId/jtoken', auth, authorize('ADMIN'), updateUserJToken);
 router.post('/user/:userId/toggle-payment', auth, authorize('ADMIN', 'SUBADMIN'), adminToggleUserPayment);
+router.put('/user/:userId/payment-toggle', auth, authorize('ADMIN', 'SUBADMIN'), adminToggleUserPayment);
 router.put('/user/:userId/block', auth, authorize('ADMIN'), toggleUserBlock);
 router.get('/deposits', auth, authorize('ADMIN', 'SUBADMIN'), getAllDeposits);
 router.post('/deposit/:depositId/approve', auth, authorize('ADMIN', 'SUBADMIN'), approveDeposit);
