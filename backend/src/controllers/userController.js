@@ -172,8 +172,13 @@ const addUpi = async (req, res) => {
 };
 
 const getUpiAccounts = async (req, res) => {
-  const accounts = await pool.query('SELECT * FROM "UPIAccount" WHERE userid = $1 ORDER BY isprimary DESC', [req.user.id]);
-  res.json(accounts.rows);
+  try {
+    const accounts = await pool.query('SELECT * FROM "UPIAccount" WHERE userid = $1 ORDER BY isprimary DESC', [req.user.id]);
+    res.json(accounts.rows);
+  } catch (error) {
+    console.error('getUpiAccounts error:', error);
+    res.status(500).json({ error: 'Failed to fetch UPI accounts' });
+  }
 };
 
 const setPrimaryUpi = async (req, res) => {
@@ -236,8 +241,13 @@ const addBank = async (req, res) => {
 };
 
 const getBankAccounts = async (req, res) => {
-  const accounts = await pool.query('SELECT * FROM "BankAccount" WHERE userid = $1 ORDER BY isprimary DESC', [req.user.id]);
-  res.json(accounts.rows);
+  try {
+    const accounts = await pool.query('SELECT * FROM "BankAccount" WHERE userid = $1 ORDER BY isprimary DESC', [req.user.id]);
+    res.json(accounts.rows);
+  } catch (error) {
+    console.error('getBankAccounts error:', error);
+    res.status(500).json({ error: 'Failed to fetch bank accounts' });
+  }
 };
 
 const setPrimaryBank = async (req, res) => {
