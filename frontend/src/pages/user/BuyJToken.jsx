@@ -528,51 +528,62 @@ const BuyJToken = () => {
                 item.status === 'CANCELLED' ? 'bg-gray-500/20 text-gray-400' :
                 'bg-yellow-500/20 text-yellow-400'
               }`}>
-                {item.status}
+                {formatStatus(item.status)}
               </span>
             </div>
           ))}
         </div>
       )}
 
-      {/* Active Request Popup */}
+      {/* Active Request Popup - Request Details */}
       {showActivePopup && request && (
-        <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4" onClick={() => setShowActivePopup(false)}>
-          <div className="bg-[#1a1a1a] rounded-3xl p-6 max-w-md w-full border border-[#D4AF37]/30" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-white font-bold text-lg">Active Request</h3>
-              <button onClick={() => setShowActivePopup(false)} className="text-gray-400">✕</button>
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={() => setShowActivePopup(false)}>
+          <div className="bg-[#1c1c1e] rounded-2xl p-6 max-w-sm w-full border border-[#2a2a2a] shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-5">
+              <h3 className="text-white font-bold text-lg">Request Details</h3>
+              <button onClick={() => setShowActivePopup(false)} className="text-gray-400 hover:text-white text-xl leading-none">✕</button>
             </div>
-            <div className="space-y-3">
-              <div className="bg-[#0a0a0a] rounded-xl p-4">
-                <p className="text-gray-400 text-sm">Amount</p>
-                <p className="text-white font-bold text-xl">₹{parseFloat(request.amount || 0).toFixed(2)}</p>
+            <p className="text-center text-gray-500 text-sm mb-4">Order: N/A</p>
+            <div className="space-y-0 divide-y divide-[#2a2a2a]">
+              <div className="flex justify-between items-center py-3">
+                <span className="text-gray-400 text-sm">Amount</span>
+                <span className="text-white font-semibold">₹{parseFloat(request.amount || 0).toFixed(2)}</span>
               </div>
-              <div className="bg-[#0a0a0a] rounded-xl p-4">
-                <p className="text-gray-400 text-sm">Status</p>
-                <span className={`inline-block px-3 py-1 rounded-full text-sm font-bold ${
+              <div className="flex justify-between items-center py-3">
+                <span className="text-gray-400 text-sm">Method</span>
+                <span className="text-white font-semibold">{request.method || 'N/A'}</span>
+              </div>
+              <div className="flex justify-between items-center py-3">
+                <span className="text-gray-400 text-sm">Status</span>
+                <span className={`px-3 py-1 rounded-full text-xs font-bold ${
                   request.status === 'APPROVED' ? 'bg-green-500/20 text-green-400' :
                   request.status === 'PAYMENT_SUBMITTED' ? 'bg-yellow-500/20 text-yellow-400' :
+                  request.status === 'PAYMENT_STARTED' ? 'bg-blue-500/20 text-blue-400' :
                   request.status === 'WAITING_ADMIN' ? 'bg-orange-500/20 text-orange-400' :
-                  'bg-blue-500/20 text-blue-400'
+                  'bg-gray-500/20 text-gray-400'
                 }`}>
                   {formatStatus(request.status)}
                 </span>
               </div>
               {request.paymentupi && (
-                <div className="bg-[#0a0a0a] rounded-xl p-4">
-                  <p className="text-gray-400 text-sm">UPI ID</p>
-                  <p className="text-white font-mono">{request.paymentupi}</p>
+                <div className="flex justify-between items-center py-3">
+                  <span className="text-gray-400 text-sm">UPI ID</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-white font-mono text-sm">{request.paymentupi}</span>
+                    <button onClick={() => copyToClipboard(request.paymentupi)} className="text-[#D4AF37]">
+                      <FaCopy className="w-3 h-3" />
+                    </button>
+                  </div>
                 </div>
               )}
               {request.adminnote && (
-                <div className="bg-[#0a0a0a] rounded-xl p-4">
-                  <p className="text-gray-400 text-sm">Note</p>
-                  <p className="text-white text-sm">{request.adminnote}</p>
+                <div className="py-3">
+                  <span className="text-gray-400 text-sm">Note</span>
+                  <p className="text-white text-sm mt-1">{request.adminnote}</p>
                 </div>
               )}
-              <p className="text-gray-500 text-xs">{request.createdat ? `Created: ${new Date(request.createdat).toLocaleString()}` : ''}</p>
             </div>
+            <p className="text-gray-600 text-xs mt-4 text-center">{request.createdat ? `Created: ${new Date(request.createdat).toLocaleString()}` : ''}</p>
           </div>
         </div>
       )}
