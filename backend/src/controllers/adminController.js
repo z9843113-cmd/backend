@@ -535,7 +535,7 @@ const assignJTokenPurchaseDetails = async (req, res) => {
   try {
     const { paymentUpi, qrImage, adminNote, bankDetails } = req.body;
     
-    const purchase = await pool.query('SELECT * FROM "JTokenPurchase" WHERE id = $1', [req.params.purchaseId]);
+    const purchase = await pool.query('SELECT * FROM "JTokenPurchase" WHERE id::text = $1', [req.params.purchaseId]);
     if (purchase.rows.length === 0) return res.status(404).json({ error: 'Request not found' });
     if (purchase.rows[0].status !== 'WAITING_ADMIN') {
       return res.status(400).json({ error: 'Payment details already assigned or request already processed' });
@@ -557,7 +557,7 @@ const assignJTokenPurchaseDetails = async (req, res) => {
     const updated = await pool.query(
       `UPDATE "JTokenPurchase"
        SET status = 'READY_TO_PAY', paymentupi = $2, qrimage = $3, adminnote = $4, method = $5, updatedat = NOW()
-       WHERE id = $1 RETURNING *`,
+       WHERE id::text = $1 RETURNING *`,
       [req.params.purchaseId, paymentUpi?.trim() || '', qrImage?.trim() || '', note, method]
     );
 
@@ -572,7 +572,7 @@ const approveJTokenPurchase = async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const purchase = await client.query('SELECT * FROM "JTokenPurchase" WHERE id = $1 FOR UPDATE', [req.params.purchaseId]);
+    const purchase = await client.query('SELECT * FROM "JTokenPurchase" WHERE id::text = $1 FOR UPDATE', [req.params.purchaseId]);
     if (purchase.rows.length === 0) {
       await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Request not found' });
@@ -590,7 +590,7 @@ const approveJTokenPurchase = async (req, res) => {
       return res.status(400).json({ error: 'User has disabled receiving payments. Ask user to enable payments from their app.' });
     }
 
-    await client.query('UPDATE "JTokenPurchase" SET status = $2, reviewedat = NOW(), updatedat = NOW() WHERE id = $1', [req.params.purchaseId, 'APPROVED']);
+    await client.query('UPDATE "JTokenPurchase" SET status = $2, reviewedat = NOW(), updatedat = NOW() WHERE id::text = $1', [req.params.purchaseId, 'APPROVED']);
     await client.query('UPDATE "Wallet" SET tokenbalance = tokenbalance + $1 WHERE userid = $2', [row.tokenamount, row.userid]);
     await client.query(
       `INSERT INTO "Transaction" (userid, type, amount, tokenamount, inrvalue, note, status, createdat)
@@ -611,14 +611,14 @@ const approveJTokenPurchase = async (req, res) => {
 const rejectJTokenPurchase = async (req, res) => {
   try {
     const { note } = req.body;
-    const purchase = await pool.query('SELECT * FROM "JTokenPurchase" WHERE id = $1', [req.params.purchaseId]);
+    const purchase = await pool.query('SELECT * FROM "JTokenPurchase" WHERE id::text = $1', [req.params.purchaseId]);
     if (purchase.rows.length === 0) return res.status(404).json({ error: 'Request not found' });
     if (!['WAITING_ADMIN', 'READY_TO_PAY', 'PAYMENT_STARTED', 'PAYMENT_SUBMITTED'].includes(purchase.rows[0].status)) {
       return res.status(400).json({ error: 'Request already processed' });
     }
 
     await pool.query(
-      `UPDATE "JTokenPurchase" SET status = 'REJECTED', adminnote = $2, reviewedat = NOW(), updatedat = NOW() WHERE id = $1`,
+      `UPDATE "JTokenPurchase" SET status = 'REJECTED', adminnote = $2, reviewedat = NOW(), updatedat = NOW() WHERE id::text = $1`,
       [req.params.purchaseId, note || 'Rejected by admin']
     );
     res.json({ message: 'J Token request rejected' });

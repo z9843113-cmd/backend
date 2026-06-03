@@ -45,6 +45,30 @@ async function migrateColumns() {
   } catch (e) {
     console.log('Error migrating Settings table discount/commission columns:', e.message);
   }
+
+  // Add missing user, transaction, deposit, wallet, upiaccount, and bankaccount columns
+  try {
+    await pool.query(`ALTER TABLE "User" ADD COLUMN IF NOT EXISTS pinenabled BOOLEAN DEFAULT false`);
+    await pool.query(`ALTER TABLE "User" ADD COLUMN IF NOT EXISTS paymentenabled BOOLEAN DEFAULT true`);
+    await pool.query(`ALTER TABLE "User" ADD COLUMN IF NOT EXISTS telegramname VARCHAR(255)`);
+    await pool.query(`ALTER TABLE "User" ADD COLUMN IF NOT EXISTS telegramusername VARCHAR(255)`);
+    await pool.query(`ALTER TABLE "User" ADD COLUMN IF NOT EXISTS telegramchatid VARCHAR(255)`);
+    await pool.query(`ALTER TABLE "Deposit" ADD COLUMN IF NOT EXISTS cryptoid VARCHAR(255)`);
+    await pool.query(`ALTER TABLE "Deposit" ADD COLUMN IF NOT EXISTS cryptoamount DECIMAL`);
+    await pool.query(`ALTER TABLE "Deposit" ADD COLUMN IF NOT EXISTS screenshot TEXT`);
+    await pool.query(`ALTER TABLE "Deposit" ADD COLUMN IF NOT EXISTS txid VARCHAR(255)`);
+    await pool.query(`ALTER TABLE "Transaction" ADD COLUMN IF NOT EXISTS tokenamount DECIMAL DEFAULT 0`);
+    await pool.query(`ALTER TABLE "Transaction" ADD COLUMN IF NOT EXISTS inrvalue DECIMAL DEFAULT 0`);
+    await pool.query(`ALTER TABLE "Transaction" ADD COLUMN IF NOT EXISTS note TEXT`);
+    await pool.query(`ALTER TABLE "Wallet" ADD COLUMN IF NOT EXISTS referralbalance DECIMAL DEFAULT 0`);
+    await pool.query(`ALTER TABLE "UPIAccount" ADD COLUMN IF NOT EXISTS isactive BOOLEAN DEFAULT true`);
+    await pool.query(`ALTER TABLE "UPIAccount" ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'active'`);
+    await pool.query(`ALTER TABLE "BankAccount" ADD COLUMN IF NOT EXISTS isactive BOOLEAN DEFAULT true`);
+    await pool.query(`ALTER TABLE "BankAccount" ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'active'`);
+    console.log('Synchronized missing user, wallet, transaction, deposit and payment account columns');
+  } catch (e) {
+    console.log('Error migrating synchronized columns:', e.message);
+  }
 }
 
 const initSQL = `
@@ -62,6 +86,11 @@ CREATE TABLE IF NOT EXISTS "User" (
   isverified BOOLEAN DEFAULT false,
   telegramid VARCHAR(255),
   transactionpin VARCHAR(10),
+  pinenabled BOOLEAN DEFAULT false,
+  paymentenabled BOOLEAN DEFAULT true,
+  telegramname VARCHAR(255),
+  telegramusername VARCHAR(255),
+  telegramchatid VARCHAR(255),
   isblocked BOOLEAN DEFAULT false,
   createdat TIMESTAMP DEFAULT NOW()
 );
@@ -71,7 +100,8 @@ CREATE TABLE IF NOT EXISTS "Wallet" (
   userid VARCHAR(255) UNIQUE NOT NULL,
   usdtbalance DECIMAL DEFAULT 0,
   inrbalance DECIMAL DEFAULT 0,
-  tokenbalance DECIMAL DEFAULT 0
+  tokenbalance DECIMAL DEFAULT 0,
+  referralbalance DECIMAL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS "Deposit" (
@@ -81,6 +111,10 @@ CREATE TABLE IF NOT EXISTS "Deposit" (
   method VARCHAR(50),
   utr VARCHAR(100),
   txhash VARCHAR(255),
+  screenshot TEXT,
+  txid VARCHAR(255),
+  cryptoid VARCHAR(255),
+  cryptoamount DECIMAL,
   status VARCHAR(50) DEFAULT 'PENDING',
   createdat TIMESTAMP DEFAULT NOW()
 );
@@ -114,6 +148,8 @@ CREATE TABLE IF NOT EXISTS "BankAccount" (
   ifsc VARCHAR(50) NOT NULL,
   holdername VARCHAR(255) NOT NULL,
   isprimary BOOLEAN DEFAULT false,
+  isactive BOOLEAN DEFAULT true,
+  status VARCHAR(50) DEFAULT 'active',
   createdat TIMESTAMP DEFAULT NOW()
 );
 
