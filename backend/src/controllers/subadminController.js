@@ -69,7 +69,7 @@ const createSubadmin = async (req, res) => {
     res.status(201).json(newSubadmin);
   } catch (error) {
     console.error('Create subadmin error:', error);
-    res.status(500).json({ error: 'Failed to create subadmin' });
+    res.status(500).json({ error: 'Failed to create subadmin: ' + error.message });
   }
 };
 
