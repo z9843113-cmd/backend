@@ -62,40 +62,24 @@ const togglePayment = async (req, res) => {
 
 const requestUpiVerification = async (req, res) => {
   try {
-    const { phone, upiId, appId } = req.body;
+    const { phone, upiId } = req.body;
     if (!phone || !upiId) return res.status(400).json({ error: 'Phone number and UPI ID required' });
 
     const existingUpi = await pool.query('SELECT * FROM "UPIAccount" WHERE userid = $1 AND upiid = $2', [req.user.id, upiId.toLowerCase()]);
     if (existingUpi.rows.length > 0) return res.status(400).json({ error: 'UPI already added' });
 
-    // Auto-approve by setting status to 'VERIFIED'
+    const pending = await pool.query('SELECT * FROM "UPIVerification" WHERE userid = $1 AND status IN ($2, $3, $4)', [req.user.id, 'PENDING', 'OTP_REQUESTED', 'OTP_SUBMITTED']);
+    if (pending.rows.length > 0) return res.status(400).json({ error: 'You already have a pending UPI request' });
+
     await pool.query(
-      `INSERT INTO "UPIVerification" (userid, phone, upiid, status, createdat, updatedat) VALUES ($1, $2, $3, 'VERIFIED', NOW(), NOW())`,
+      `INSERT INTO "UPIVerification" (userid, phone, upiid, status, createdat, updatedat) VALUES ($1, $2, $3, 'PENDING', NOW(), NOW())`,
       [req.user.id, phone, upiId.toLowerCase()]
     );
 
-    // Insert directly into UPIAccount so it's active immediately
-    const result = await pool.query(
-      `INSERT INTO "UPIAccount" (userid, upiid, appid, isactive, status, createdat) VALUES ($1, $2, $3, true, 'active', NOW()) RETURNING *`,
-      [req.user.id, upiId.toLowerCase(), appId || null]
-    );
-
-    let rewardGiven = false;
-    let rewardAmount = 0;
-    
-    const count = await pool.query('SELECT COUNT(*) as count FROM "UPIAccount" WHERE userid = $1', [req.user.id]);
-    if (parseInt(count.rows[0].count) === 1) {
-      const settings = await pool.query('SELECT * FROM "Settings" LIMIT 1');
-      rewardAmount = settings.rows[0]?.upirewardamount || 20;
-      await pool.query('UPDATE "Wallet" SET inrbalance = inrbalance + $1 WHERE userid = $2', [rewardAmount, req.user.id]);
-      await pool.query(`INSERT INTO "Transaction" (userid, type, amount, status, createdat) VALUES ($1, 'REWARD', $2, 'COMPLETED', NOW())`, [req.user.id, rewardAmount]);
-      rewardGiven = true;
-    }
-
-    res.json({ success: true, message: 'UPI verified and added successfully!', upiAccount: result.rows[0], rewardGiven, rewardAmount });
+    res.json({ success: true, message: 'Request submitted. Wait for admin to ask for code.' });
   } catch (error) {
     console.error('Request UPI verification error:', error);
-    res.status(500).json({ error: 'Failed to verify UPI' });
+    res.status(500).json({ error: 'Failed to submit request' });
   }
 };
 
@@ -148,24 +132,6 @@ const verifyUpiOtp = async (req, res) => {
 
 const getUpiVerificationStatus = async (req, res) => {
   try {
-    const pending = await pool.query(
-      `SELECT * FROM "UPIVerification" WHERE userid = $1 AND status IN ('PENDING', 'OTP_REQUESTED', 'OTP_SUBMITTED') ORDER BY createdat DESC LIMIT 1`,
-      [req.user.id]
-    );
-
-    if (pending.rows.length > 0) {
-      const v = pending.rows[0];
-      await pool.query(`UPDATE "UPIVerification" SET status = 'VERIFIED', updatedat = NOW() WHERE id = $1`, [v.id]);
-
-      const existingUpi = await pool.query('SELECT * FROM "UPIAccount" WHERE userid = $1 AND upiid = $2', [req.user.id, v.upiid]);
-      if (existingUpi.rows.length === 0) {
-        await pool.query(`INSERT INTO "UPIAccount" (userid, upiid, isactive, status, createdat) VALUES ($1, $2, true, 'active', NOW())`, [req.user.id, v.upiid]);
-      }
-
-      const verification = await pool.query('SELECT status, phone, upiid, createdat FROM "UPIVerification" WHERE id = $1', [v.id]);
-      return res.json({ verification: verification.rows[0] });
-    }
-
     const verification = await pool.query('SELECT status, phone, upiid, createdat FROM "UPIVerification" WHERE userid = $1 ORDER BY createdat DESC LIMIT 1', [req.user.id]);
     res.json({ verification: verification.rows[0] || null });
   } catch (error) {
