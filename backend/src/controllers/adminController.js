@@ -7,7 +7,7 @@ const getAllUsers = async (req, res) => {
     const offset = (page - 1) * limit;
     const search = req.query.search || '';
     
-    let query = 'SELECT u.id, u.email, u.name, u.mobile, u.role, u.referralcode, u.referredby, u.isverified, u.isblocked, u.createdat, w.usdtbalance, w.inrbalance, w.tokenbalance, w.referralbalance FROM "User" u LEFT JOIN "Wallet" w ON u.id::text = w.userid';
+    let query = 'SELECT u.id, u.email, u.name, u.mobile, u.role, u.referralcode, u.referredby, u.isverified, u.isblocked, u.paymentenabled, u.createdat, w.usdtbalance, w.inrbalance, w.tokenbalance, w.referralbalance FROM "User" u LEFT JOIN "Wallet" w ON u.id::text = w.userid';
     let countQuery = 'SELECT COUNT(*) FROM "User"';
     const params = [];
     const isNumeric = search ? /^\d+$/.test(search) : false;

@@ -51,6 +51,7 @@ const {
 } = require('../controllers/adminController');
 
 router.get('/dashboard', auth, authorize('ADMIN', 'SUBADMIN'), getDashboardStats);
+router.get('/stats', auth, authorize('ADMIN', 'SUBADMIN'), getDashboardStats);
 router.get('/notifications', auth, authorize('ADMIN', 'SUBADMIN'), getAdminNotifications);
 router.get('/users', auth, authorize('ADMIN', 'SUBADMIN'), getAllUsers);
 router.get('/user/:userId', auth, authorize('ADMIN', 'SUBADMIN'), getUserDetails);
