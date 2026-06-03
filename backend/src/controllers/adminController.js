@@ -159,7 +159,7 @@ const approveDeposit = async (req, res) => {
     console.log('Approve deposit called for:', req.params.depositId);
     await client.query('BEGIN');
     
-    const deposit = await client.query('SELECT * FROM "Deposit" WHERE id = $1', [req.params.depositId]);
+    const deposit = await client.query('SELECT * FROM "Deposit" WHERE id::text = $1', [req.params.depositId]);
     console.log('Deposit found:', deposit.rows.length);
     if (deposit.rows.length === 0) {
       await client.query('ROLLBACK');
@@ -172,17 +172,18 @@ const approveDeposit = async (req, res) => {
     
     const depositData = deposit.rows[0];
     const depositAmount = parseFloat(depositData.amount);
-    const userId = depositData.userid;
+    const userId = String(depositData.userid);
     
     console.log('Deposit data:', depositData);
     console.log('User ID:', userId);
     
     console.log('Updating deposit status...');
-    await client.query('UPDATE "Deposit" SET status = $1 WHERE id = $2', ['APPROVED', req.params.depositId]);
+    await client.query('UPDATE "Deposit" SET status = $1 WHERE id::text = $2', ['APPROVED', req.params.depositId]);
     
     console.log('Updating wallet balance...');
     const walletCheck = await client.query('SELECT * FROM "Wallet" WHERE userid = $1', [userId]);
     if (walletCheck.rows.length === 0) {
+      console.log('Wallet not found, creating new wallet for user:', userId);
       await client.query('INSERT INTO "Wallet" (userid, usdtbalance, inrbalance, tokenbalance, referralbalance) VALUES ($1, 0, $2, 0, 0)', [userId, depositAmount]);
     } else {
       await client.query('UPDATE "Wallet" SET inrbalance = inrbalance + $1 WHERE userid = $2', [depositAmount, userId]);
@@ -192,7 +193,7 @@ const approveDeposit = async (req, res) => {
     await client.query(`INSERT INTO "Transaction" (userid, type, amount, status, createdat) VALUES ($1, 'DEPOSIT', $2, 'COMPLETED', NOW())`, [userId, depositAmount]);
     
     await client.query('COMMIT');
-    console.log('Deposit approved successfully');
+    console.log('Deposit approved successfully, balance updated by:', depositAmount);
     res.json({ message: 'Approved' });
   } catch (error) {
     await client.query('ROLLBACK');
@@ -205,7 +206,7 @@ const approveDeposit = async (req, res) => {
 
 const rejectDeposit = async (req, res) => {
   try {
-    await pool.query('UPDATE "Deposit" SET status = $1 WHERE id = $2 AND status = $3', ['REJECTED', req.params.depositId, 'PENDING']);
+    await pool.query('UPDATE "Deposit" SET status = $1 WHERE id::text = $2 AND status = $3', ['REJECTED', req.params.depositId, 'PENDING']);
     res.json({ message: 'Rejected' });
   } catch (error) {
     console.error('Reject deposit error:', error);
