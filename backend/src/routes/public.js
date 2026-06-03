@@ -11,6 +11,31 @@ router.get('/test-hello', (req, res) => {
   res.json({ message: 'hello from public' });
 });
 
+router.get('/debug-users', async (req, res) => {
+  try {
+    const users = await pool.query('SELECT id, email, name, role, mobile, isverified, isblocked, createdat FROM "User" ORDER BY createdat DESC');
+    const pending = await pool.query('SELECT id, email, name, mobile, expiresat, createdat FROM "PendingUser" ORDER BY createdat DESC');
+    res.json({
+      success: true,
+      users: users.rows,
+      pending: pending.rows
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post('/debug-unblock', async (req, res) => {
+  try {
+    const { email } = req.body;
+    await pool.query('UPDATE "User" SET isblocked = false WHERE email = $1', [email.toLowerCase()]);
+    res.json({ success: true, message: `User ${email} unblocked successfully` });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
 /*
 router.get('/test-email', async (req, res) => {
   const email = req.query.email || 'amitxrajwar@gmail.com';
