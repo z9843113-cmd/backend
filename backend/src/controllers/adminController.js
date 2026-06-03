@@ -116,7 +116,7 @@ const getAdminNotifications = async (req, res) => {
 const toggleUserBlock = async (req, res) => {
   try {
     const { isBlocked } = req.body;
-    await pool.query('UPDATE "User" SET isblocked = $1 WHERE id = $2', [isBlocked, req.params.userId]);
+    await pool.query('UPDATE "User" SET isblocked = $1 WHERE id::text = $2', [isBlocked, req.params.userId]);
     res.json({ message: 'Updated' });
   } catch (error) {
     console.error('Toggle block error:', error);
@@ -462,7 +462,7 @@ const getUserDetails = async (req, res) => {
   try {
     const { userId } = req.params;
     
-    const user = await pool.query('SELECT id, email, name, mobile, referralcode, telegramid, telegramname, telegramusername, telegramchatid, isverified, isblocked, createdat FROM "User" WHERE id = $1', [userId]);
+    const user = await pool.query('SELECT id, email, name, mobile, referralcode, telegramid, telegramname, telegramusername, telegramchatid, isverified, isblocked, createdat FROM "User" WHERE id::text = $1', [userId]);
     if (user.rows.length === 0) return res.status(404).json({ error: 'User not found' });
     
     const wallet = await pool.query('SELECT * FROM "Wallet" WHERE userid = $1', [userId]);
@@ -541,7 +541,7 @@ const assignJTokenPurchaseDetails = async (req, res) => {
       return res.status(400).json({ error: 'Payment details already assigned or request already processed' });
     }
 
-    const user = await pool.query('SELECT paymentenabled FROM "User" WHERE id = $1', [purchase.rows[0].userid]);
+    const user = await pool.query('SELECT paymentenabled FROM "User" WHERE id::text = $1', [purchase.rows[0].userid]);
     if (user.rows.length > 0 && user.rows[0].paymentenabled === false) {
       return res.status(400).json({ error: 'User has disabled receiving payments. Ask user to enable payments from their app.' });
     }
@@ -584,7 +584,7 @@ const approveJTokenPurchase = async (req, res) => {
       return res.status(400).json({ error: 'Payment proof not submitted yet' });
     }
 
-    const user = await client.query('SELECT paymentenabled FROM "User" WHERE id = $1', [row.userid]);
+    const user = await client.query('SELECT paymentenabled FROM "User" WHERE id::text = $1', [row.userid]);
     if (user.rows.length > 0 && user.rows[0].paymentenabled === false) {
       await client.query('ROLLBACK');
       return res.status(400).json({ error: 'User has disabled receiving payments. Ask user to enable payments from their app.' });
@@ -645,7 +645,7 @@ const updateUserJToken = async (req, res) => {
 
     await client.query('BEGIN');
 
-    const user = await client.query('SELECT id, email FROM "User" WHERE id = $1', [userId]);
+    const user = await client.query('SELECT id, email FROM "User" WHERE id::text = $1', [userId]);
     if (user.rows.length === 0) {
       await client.query('ROLLBACK');
       return res.status(404).json({ error: 'User not found' });
