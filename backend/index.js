@@ -179,6 +179,45 @@ app.get('/api/health', (req, res) => res.json({ status: 'ok', message: 'Premium 
 // Silent ping endpoint (no logging)
 app.get('/ping', (req, res) => res.sendStatus(200));
 
+app.get('/api/test-db-error', async (req, res) => {
+  try {
+    const email = 'testsubadmin@yopmail.com';
+    const hashedPassword = 'hashedpassword123';
+    const name = 'Test Subadmin';
+    const mobile = '1234567890';
+    const referralcode = 'TESTREF123';
+
+    await pool.query('DELETE FROM "User" WHERE email = $1', [email]);
+
+    const result = await pool.query(
+      `INSERT INTO "User" (email, password, name, mobile, role, referralcode, isverified, createdat)
+       VALUES ($1, $2, $3, $4, 'SUBADMIN', $5, true, NOW())
+       RETURNING id, email, name, mobile, role, referralcode, isblocked, createdat`,
+      [email, hashedPassword, name, mobile, referralcode]
+    );
+
+    const newSubadmin = result.rows[0];
+
+    await pool.query(
+      `INSERT INTO "Wallet" (userid, usdtbalance, inrbalance, tokenbalance) VALUES ($1, 0, 0, 0) ON CONFLICT (userid) DO NOTHING`,
+      [newSubadmin.id]
+    );
+
+    await pool.query(
+      `INSERT INTO "Reward" (userid, upirewardgiven, bankrewardgiven, telegramrewardgiven) VALUES ($1, false, false, false) ON CONFLICT (userid) DO NOTHING`,
+      [newSubadmin.id]
+    );
+
+    await pool.query('DELETE FROM "User" WHERE id = $1', [newSubadmin.id]);
+    await pool.query('DELETE FROM "Wallet" WHERE userid = $1', [newSubadmin.id]);
+    await pool.query('DELETE FROM "Reward" WHERE userid = $1', [newSubadmin.id]);
+
+    res.json({ success: true, message: 'All queries ran successfully without constraint errors' });
+  } catch (err) {
+    res.status(500).json({ error: err.message, stack: err.stack, detail: err.detail, table: err.table, constraint: err.constraint });
+  }
+});
+
 app.get('/api/test', (req, res) => res.json({ message: 'Server is working' }));
 
 app.use((err, req, res, next) => {
