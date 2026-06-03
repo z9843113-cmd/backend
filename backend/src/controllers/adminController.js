@@ -124,6 +124,35 @@ const toggleUserBlock = async (req, res) => {
   }
 };
 
+const adminToggleUserPayment = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    // Get current paymentenabled status
+    const user = await pool.query(
+      'SELECT id, name, email, paymentenabled FROM "User" WHERE id::text = $1',
+      [userId]
+    );
+    if (user.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    // Toggle: if currently true/null → false, if false → true
+    const current = user.rows[0].paymentenabled;
+    const newValue = current === false ? true : false;
+    await pool.query(
+      'UPDATE "User" SET paymentenabled = $1 WHERE id::text = $2',
+      [newValue, userId]
+    );
+    res.json({
+      success: true,
+      paymentEnabled: newValue,
+      message: newValue ? 'Receive payment enabled for user' : 'Receive payment disabled for user'
+    });
+  } catch (error) {
+    console.error('Admin toggle payment error:', error);
+    res.status(500).json({ error: 'Failed to toggle payment status: ' + error.message });
+  }
+};
+
 const getAllDeposits = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
@@ -1277,4 +1306,4 @@ const reconcileJTokenWallets = async (req, res) => {
   }
 };
 
-module.exports = { getAllUsers, getAdminNotifications, toggleUserBlock, getAllDeposits, approveDeposit, rejectDeposit, getAllWithdrawals, approveWithdrawal, rejectWithdrawal, getAllUpiApps, createUpiApp, updateUpiApp, deleteUpiApp, getAllCryptoAddresses, createCryptoAddress, updateCryptoAddress, deleteCryptoAddress, getSettings, updateSettings, getDashboardStats, updateSupportLinks, getSupportLinksAdmin, getUserDetails, updateUserJToken, getJTokenHistory, getAllJTokenPurchases, assignJTokenPurchaseDetails, approveJTokenPurchase, rejectJTokenPurchase, getAllUpiVerifications, askUpiOtp, approveUpiVerification, rejectUpiVerification, getAllExchangeRequests, approveExchangeRequest, rejectExchangeRequest, cleanupDatabase, resetDatabase, getAllMobileVerifications, askMobileOtp, reverifyMobileOtp, approveMobileVerification, rejectMobileVerification, reconcileJTokenWallets };
+module.exports = { getAllUsers, getAdminNotifications, toggleUserBlock, adminToggleUserPayment, getAllDeposits, approveDeposit, rejectDeposit, getAllWithdrawals, approveWithdrawal, rejectWithdrawal, getAllUpiApps, createUpiApp, updateUpiApp, deleteUpiApp, getAllCryptoAddresses, createCryptoAddress, updateCryptoAddress, deleteCryptoAddress, getSettings, updateSettings, getDashboardStats, updateSupportLinks, getSupportLinksAdmin, getUserDetails, updateUserJToken, getJTokenHistory, getAllJTokenPurchases, assignJTokenPurchaseDetails, approveJTokenPurchase, rejectJTokenPurchase, getAllUpiVerifications, askUpiOtp, approveUpiVerification, rejectUpiVerification, getAllExchangeRequests, approveExchangeRequest, rejectExchangeRequest, cleanupDatabase, resetDatabase, getAllMobileVerifications, askMobileOtp, reverifyMobileOtp, approveMobileVerification, rejectMobileVerification, reconcileJTokenWallets };

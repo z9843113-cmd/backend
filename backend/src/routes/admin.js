@@ -46,7 +46,8 @@ const {
   reverifyMobileOtp,
   approveMobileVerification,
   rejectMobileVerification,
-  reconcileJTokenWallets
+  reconcileJTokenWallets,
+  adminToggleUserPayment
 } = require('../controllers/adminController');
 
 router.get('/dashboard', auth, authorize('ADMIN', 'SUBADMIN'), getDashboardStats);
@@ -54,6 +55,7 @@ router.get('/notifications', auth, authorize('ADMIN', 'SUBADMIN'), getAdminNotif
 router.get('/users', auth, authorize('ADMIN', 'SUBADMIN'), getAllUsers);
 router.get('/user/:userId', auth, authorize('ADMIN', 'SUBADMIN'), getUserDetails);
 router.post('/user/:userId/jtoken', auth, authorize('ADMIN'), updateUserJToken);
+router.post('/user/:userId/toggle-payment', auth, authorize('ADMIN', 'SUBADMIN'), adminToggleUserPayment);
 router.put('/user/:userId/block', auth, authorize('ADMIN'), toggleUserBlock);
 router.get('/deposits', auth, authorize('ADMIN', 'SUBADMIN'), getAllDeposits);
 router.post('/deposit/:depositId/approve', auth, authorize('ADMIN', 'SUBADMIN'), approveDeposit);
