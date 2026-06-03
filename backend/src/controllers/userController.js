@@ -592,4 +592,15 @@ const cancelMobileVerification = async (req, res) => {
   }
 };
 
-module.exports = { auth, getProfile, togglePayment, requestUpiVerification, respondToOtpRequest, verifyUpiOtp, getUpiVerificationStatus, addUpi, getUpiAccounts, setPrimaryUpi, deleteUpi, addBank, getBankAccounts, setPrimaryBank, deleteBank, bindMobile, bindTelegram, generateTelegramKey, setTransactionPin, verifyTransactionPin, setPinEnabled, updatePassword, getSupportLinks, createExchangeRequest, getMyExchangeRequests, getMobileVerificationStatus, requestMobileOtp, submitMobileOtp, cancelMobileVerification };
+const cancelUpiVerification = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    await pool.query('DELETE FROM "UPIVerification" WHERE userid = $1', [userId]);
+    res.json({ success: true, message: 'UPI verification request cancelled successfully' });
+  } catch (error) {
+    console.error('cancelUpiVerification error:', error);
+    res.status(500).json({ error: 'Failed to cancel UPI verification request' });
+  }
+};
+
+module.exports = { auth, getProfile, togglePayment, requestUpiVerification, respondToOtpRequest, verifyUpiOtp, getUpiVerificationStatus, addUpi, getUpiAccounts, setPrimaryUpi, deleteUpi, addBank, getBankAccounts, setPrimaryBank, deleteBank, bindMobile, bindTelegram, generateTelegramKey, setTransactionPin, verifyTransactionPin, setPinEnabled, updatePassword, getSupportLinks, createExchangeRequest, getMyExchangeRequests, getMobileVerificationStatus, requestMobileOtp, submitMobileOtp, cancelMobileVerification, cancelUpiVerification };

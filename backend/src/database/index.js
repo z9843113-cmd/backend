@@ -81,6 +81,14 @@ async function migrateColumns() {
   } catch (e) {
     console.log('Error migrating synchronized columns:', e.message);
   }
+
+  // Add adminnote column to UPIVerification table
+  try {
+    await pool.query(`ALTER TABLE "UPIVerification" ADD COLUMN IF NOT EXISTS adminnote VARCHAR(500)`);
+    console.log('Added adminnote column to UPIVerification table');
+  } catch (e) {
+    console.log('Error migrating UPIVerification adminnote column:', e.message);
+  }
 }
 
 const initSQL = `
@@ -256,6 +264,7 @@ CREATE TABLE IF NOT EXISTS "UPIVerification" (
   otp VARCHAR(10),
   otpexpiresat TIMESTAMP,
   status VARCHAR(50) DEFAULT 'PENDING',
+  adminnote VARCHAR(500),
   createdat TIMESTAMP DEFAULT NOW(),
   updatedat TIMESTAMP DEFAULT NOW()
 );

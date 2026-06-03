@@ -117,6 +117,7 @@ const userAPI = {
   submitUpiOtp: (otp) => authFetch(`${API_BASE}/user/upi/submit-otp`, { method: 'POST', body: JSON.stringify({ otp }) }),
   verifyUpiOtp: (otp) => authFetch(`${API_BASE}/user/upi/verify-otp`, { method: 'POST', body: JSON.stringify({ otp }) }),
   getUpiVerificationStatus: () => authFetch(`${API_BASE}/user/upi/verification-status`),
+  cancelUpiVerification: () => authFetch(`${API_BASE}/user/upi/cancel`, { method: 'POST' }),
   addUpi: (data) => authFetch(`${API_BASE}/user/add-upi`, { method: 'POST', body: JSON.stringify(data) }),
   getUpiAccounts: () => authFetch(`${API_BASE}/user/upi-accounts`),
   setPrimaryUpi: (data) => authFetch(`${API_BASE}/user/set-primary-upi`, { method: 'POST', body: JSON.stringify(data) }),

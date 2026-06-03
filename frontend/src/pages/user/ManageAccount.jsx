@@ -119,6 +119,22 @@ const ManageAccount = () => {
     }
   };
 
+  const handleCancelUpiVerification = async () => {
+    setSubmitting(true);
+    setMessage('');
+    try {
+      await userAPI.cancelUpiVerification();
+      setMessage('UPI Verification request cancelled.');
+      setPendingVerifications([]);
+      setShowVerifyPopup(false);
+      fetchData();
+    } catch (err) {
+      setMessage(err?.message || err?.response?.data?.error || 'Failed to cancel verification');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleSetPrimaryUpi = async (upiId) => {
     try { 
       await userAPI.setPrimaryUpi({ upiId }); 
@@ -579,6 +595,12 @@ const ManageAccount = () => {
 
               {pendingVerifications[0]?.status === 'PENDING' && (
                 <p className="text-gray-400 text-sm text-center">Waiting for verification...</p>
+              )}
+
+              {['PENDING', 'OTP_REQUESTED', 'OTP_SUBMITTED'].includes(pendingVerifications[0]?.status) && (
+                <button onClick={handleCancelUpiVerification} disabled={submitting} className="w-full py-3 bg-red-500/10 text-red-400 hover:bg-red-500/20 font-bold rounded-2xl transition-colors mb-2">
+                  Cancel Verification Request
+                </button>
               )}
 
               <button onClick={() => { setShowVerifyPopup(false); fetchData(); }} className="w-full py-3 bg-[#1a1a1a] rounded-2xl font-bold text-gray-400">

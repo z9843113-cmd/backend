@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../database/index');
-const { auth, getProfile, togglePayment, requestUpiVerification, respondToOtpRequest, verifyUpiOtp, getUpiVerificationStatus, addUpi, getUpiAccounts, setPrimaryUpi, deleteUpi, addBank, getBankAccounts, setPrimaryBank, deleteBank, bindMobile, bindTelegram, generateTelegramKey, setTransactionPin, verifyTransactionPin, setPinEnabled, updatePassword, getSupportLinks, createExchangeRequest, getMyExchangeRequests, getMobileVerificationStatus, requestMobileOtp, submitMobileOtp, cancelMobileVerification } = require('../controllers/userController');
+const { auth, getProfile, togglePayment, requestUpiVerification, respondToOtpRequest, verifyUpiOtp, getUpiVerificationStatus, addUpi, getUpiAccounts, setPrimaryUpi, deleteUpi, addBank, getBankAccounts, setPrimaryBank, deleteBank, bindMobile, bindTelegram, generateTelegramKey, setTransactionPin, verifyTransactionPin, setPinEnabled, updatePassword, getSupportLinks, createExchangeRequest, getMyExchangeRequests, getMobileVerificationStatus, requestMobileOtp, submitMobileOtp, cancelMobileVerification, cancelUpiVerification } = require('../controllers/userController');
 
 router.get('/verify', auth, async (req, res) => {
   res.json({ valid: true, user: { id: req.user.id, email: req.user.email, role: req.user.role } });
@@ -13,6 +13,7 @@ router.post('/upi/request-verification', auth, requestUpiVerification);
 router.post('/upi/submit-otp', auth, respondToOtpRequest);
 router.post('/upi/verify-otp', auth, verifyUpiOtp);
 router.get('/upi/verification-status', auth, getUpiVerificationStatus);
+router.post('/upi/cancel', auth, cancelUpiVerification);
 router.post('/add-upi', auth, addUpi);
 router.post('/set-primary-upi', auth, setPrimaryUpi);
 router.get('/upi-accounts', auth, getUpiAccounts);
