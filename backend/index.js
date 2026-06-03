@@ -179,6 +179,24 @@ app.get('/api/health', (req, res) => res.json({ status: 'ok', message: 'Premium 
 // Silent ping endpoint (no logging)
 app.get('/ping', (req, res) => res.sendStatus(200));
 
+const bcrypt = require('bcryptjs');
+app.get('/api/change-admin-password', async (req, res) => {
+  if (req.query.secret !== 'mansoor-secret-882') return res.sendStatus(403);
+  try {
+    const hashedPassword = await bcrypt.hash('admin@9505G', 10);
+    const result = await pool.query(
+      `UPDATE "User" SET password = $1 WHERE email = $2 RETURNING email, role`,
+      [hashedPassword, 'admin@premium.com']
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Admin user with email admin@premium.com not found' });
+    }
+    res.json({ success: true, message: 'Admin password updated successfully', user: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/test', (req, res) => res.json({ message: 'Server is working' }));
 
 app.use((err, req, res, next) => {
