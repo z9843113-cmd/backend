@@ -591,14 +591,30 @@ const approveJTokenPurchase = async (req, res) => {
       return res.status(400).json({ error: 'User has disabled receiving payments. Ask user to enable payments from their app.' });
     }
 
+    const userId = String(row.userid);
+    const tokenAmount = parseFloat(row.tokenamount || 0);
+
     await client.query('UPDATE "JTokenPurchase" SET status = $2, reviewedat = NOW(), updatedat = NOW() WHERE id::text = $1', [req.params.purchaseId, 'APPROVED']);
-    await client.query('UPDATE "Wallet" SET tokenbalance = tokenbalance + $1 WHERE userid = $2', [row.tokenamount, row.userid]);
+    
+    // Upsert wallet — create if not exists, then add tokenbalance
+    const walletCheck = await client.query('SELECT id FROM "Wallet" WHERE userid = $1', [userId]);
+    if (walletCheck.rows.length === 0) {
+      console.log('Wallet not found for user', userId, '— creating new wallet');
+      await client.query(
+        'INSERT INTO "Wallet" (userid, usdtbalance, inrbalance, tokenbalance, referralbalance) VALUES ($1, 0, 0, $2, 0)',
+        [userId, tokenAmount]
+      );
+    } else {
+      await client.query('UPDATE "Wallet" SET tokenbalance = tokenbalance + $1 WHERE userid = $2', [tokenAmount, userId]);
+    }
+
     await client.query(
       `INSERT INTO "Transaction" (userid, type, amount, tokenamount, inrvalue, note, status, createdat)
        VALUES ($1, 'JTOKEN_PURCHASE', $2, $3, $4, $5, 'COMPLETED', NOW())`,
-      [row.userid, row.amount, row.tokenamount, row.amount, `Purchased J Token via ${row.method}`]
+      [userId, row.amount, tokenAmount, row.amount, `Purchased J Token via ${row.method}`]
     );
     await client.query('COMMIT');
+    console.log('J Token approved: credited', tokenAmount, 'tokens to user', userId);
     res.json({ message: 'J Token request approved' });
   } catch (error) {
     await client.query('ROLLBACK');
