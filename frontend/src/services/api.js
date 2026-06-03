@@ -54,6 +54,10 @@ const authFetch = async (url, options = {}) => {
   if (!response.ok) {
     if (response.status === 401) {
       const error = await response.json().catch(() => ({ error: 'Unauthorized' }));
+      console.log('UNAUTHORIZED 401 - Clearing token and redirecting to login');
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.href = '/login';
       throw new Error(error.error || 'Unauthorized');
     }
     const error = await response.json().catch(() => ({ error: 'Request failed' }));
