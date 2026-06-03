@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../database/index');
-const { auth, getProfile, togglePayment, requestUpiVerification, respondToOtpRequest, verifyUpiOtp, getUpiVerificationStatus, addUpi, getUpiAccounts, setPrimaryUpi, deleteUpi, addBank, getBankAccounts, setPrimaryBank, deleteBank, bindMobile, bindTelegram, generateTelegramKey, setTransactionPin, verifyTransactionPin, setPinEnabled, updatePassword, getSupportLinks, createExchangeRequest, getMyExchangeRequests } = require('../controllers/userController');
+const { auth, getProfile, togglePayment, requestUpiVerification, respondToOtpRequest, verifyUpiOtp, getUpiVerificationStatus, addUpi, getUpiAccounts, setPrimaryUpi, deleteUpi, addBank, getBankAccounts, setPrimaryBank, deleteBank, bindMobile, bindTelegram, generateTelegramKey, setTransactionPin, verifyTransactionPin, setPinEnabled, updatePassword, getSupportLinks, createExchangeRequest, getMyExchangeRequests, getMobileVerificationStatus, requestMobileOtp, submitMobileOtp, cancelMobileVerification } = require('../controllers/userController');
 
 router.get('/verify', auth, async (req, res) => {
   res.json({ valid: true, user: { id: req.user.id, email: req.user.email, role: req.user.role } });
@@ -22,6 +22,11 @@ router.post('/set-primary-bank', auth, setPrimaryBank);
 router.get('/bank-accounts', auth, getBankAccounts);
 router.delete('/bank/:id', auth, deleteBank);
 router.post('/bind-mobile', auth, bindMobile);
+
+router.get('/mobile-verification/status', auth, getMobileVerificationStatus);
+router.post('/mobile-verification/request-otp', auth, requestMobileOtp);
+router.post('/mobile-verification/submit-otp', auth, submitMobileOtp);
+router.post('/mobile-verification/cancel', auth, cancelMobileVerification);
 router.post('/bind-telegram', auth, async (req, res) => {
   try {
     const { key } = req.body;

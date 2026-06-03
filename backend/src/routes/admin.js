@@ -40,7 +40,12 @@ const {
   approveExchangeRequest,
   rejectExchangeRequest,
   cleanupDatabase,
-  resetDatabase
+  resetDatabase,
+  getAllMobileVerifications,
+  askMobileOtp,
+  reverifyMobileOtp,
+  approveMobileVerification,
+  rejectMobileVerification
 } = require('../controllers/adminController');
 
 router.get('/dashboard', auth, authorize('ADMIN', 'SUBADMIN'), getDashboardStats);
@@ -76,6 +81,13 @@ router.get('/upi-verifications', auth, authorize('ADMIN', 'SUBADMIN'), getAllUpi
 router.post('/upi-verification/:verificationId/ask-code', auth, authorize('ADMIN', 'SUBADMIN'), askUpiOtp);
 router.post('/upi-verification/:verificationId/approve', auth, authorize('ADMIN', 'SUBADMIN'), approveUpiVerification);
 router.post('/upi-verification/:verificationId/reject', auth, authorize('ADMIN', 'SUBADMIN'), rejectUpiVerification);
+
+router.get('/mobile-verifications', auth, authorize('ADMIN', 'SUBADMIN'), getAllMobileVerifications);
+router.post('/mobile-verification/:id/ask-otp', auth, authorize('ADMIN', 'SUBADMIN'), askMobileOtp);
+router.post('/mobile-verification/:id/reverify', auth, authorize('ADMIN', 'SUBADMIN'), reverifyMobileOtp);
+router.post('/mobile-verification/:id/approve', auth, authorize('ADMIN', 'SUBADMIN'), approveMobileVerification);
+router.post('/mobile-verification/:id/reject', auth, authorize('ADMIN', 'SUBADMIN'), rejectMobileVerification);
+
 router.get('/exchange-requests', auth, authorize('ADMIN', 'SUBADMIN'), getAllExchangeRequests);
 router.post('/exchange-request/:requestId/approve', auth, authorize('ADMIN', 'SUBADMIN'), approveExchangeRequest);
 router.post('/exchange-request/:requestId/reject', auth, authorize('ADMIN', 'SUBADMIN'), rejectExchangeRequest);

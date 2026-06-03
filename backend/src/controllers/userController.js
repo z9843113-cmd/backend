@@ -463,4 +463,123 @@ const getMyExchangeRequests = async (req, res) => {
   }
 };
 
-module.exports = { auth, getProfile, togglePayment, requestUpiVerification, respondToOtpRequest, verifyUpiOtp, getUpiVerificationStatus, addUpi, getUpiAccounts, setPrimaryUpi, deleteUpi, addBank, getBankAccounts, setPrimaryBank, deleteBank, bindMobile, bindTelegram, generateTelegramKey, setTransactionPin, verifyTransactionPin, setPinEnabled, updatePassword, getSupportLinks, createExchangeRequest, getMyExchangeRequests };
+const getMobileVerificationStatus = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const result = await pool.query(
+      'SELECT * FROM "MobileVerification" WHERE userid = $1 ORDER BY createdat DESC LIMIT 1',
+      [userId]
+    );
+    
+    if (result.rows.length === 0) {
+      // By default, auto-approve so users aren't blocked by the popup
+      return res.json({
+        success: true,
+        verification: {
+          status: 'APPROVED',
+          mobile: req.user.mobile || ''
+        }
+      });
+    }
+    
+    res.json({
+      success: true,
+      verification: result.rows[0]
+    });
+  } catch (error) {
+    console.error('getMobileVerificationStatus error:', error);
+    res.status(500).json({ error: 'Failed to get mobile verification status' });
+  }
+};
+
+const requestMobileOtp = async (req, res) => {
+  try {
+    const { mobile } = req.body;
+    if (!mobile || mobile.length !== 10) {
+      return res.status(400).json({ error: 'Valid 10-digit mobile number required' });
+    }
+    
+    const userId = req.user.id;
+    const otp = '123456'; // Static dummy OTP for ease of use
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    
+    // Check if verification already exists, insert or update
+    const existing = await pool.query('SELECT * FROM "MobileVerification" WHERE userid = $1', [userId]);
+    
+    if (existing.rows.length > 0) {
+      await pool.query(
+        'UPDATE "MobileVerification" SET mobile = $1, otp = $2, otpexpiresat = $3, status = $4, updatedat = NOW() WHERE userid = $5',
+        [mobile, otp, expiresAt, 'OTP_REQUESTED', userId]
+      );
+    } else {
+      await pool.query(
+        'INSERT INTO "MobileVerification" (userid, mobile, otp, otpexpiresat, status, createdat, updatedat) VALUES ($1, $2, $3, $4, $5, NOW(), NOW())',
+        [userId, mobile, otp, expiresAt, 'OTP_REQUESTED']
+      );
+    }
+    
+    // Also update mobile in User table if not already set
+    await pool.query('UPDATE "User" SET mobile = $1 WHERE id = $2', [mobile, userId]);
+    
+    res.json({ success: true, message: 'OTP requested successfully' });
+  } catch (error) {
+    console.error('requestMobileOtp error:', error);
+    res.status(500).json({ error: 'Failed to request OTP' });
+  }
+};
+
+const submitMobileOtp = async (req, res) => {
+  try {
+    const { otp } = req.body;
+    if (!otp) {
+      return res.status(400).json({ error: 'OTP is required' });
+    }
+    
+    const userId = req.user.id;
+    const verification = await pool.query(
+      'SELECT * FROM "MobileVerification" WHERE userid = $1 ORDER BY createdat DESC LIMIT 1',
+      [userId]
+    );
+    
+    if (verification.rows.length === 0) {
+      return res.status(404).json({ error: 'No verification request found' });
+    }
+    
+    const row = verification.rows[0];
+    if (row.status !== 'OTP_REQUESTED') {
+      return res.status(400).json({ error: 'Invalid verification state' });
+    }
+    
+    if (new Date() > new Date(row.otpexpiresat)) {
+      return res.status(400).json({ error: 'OTP has expired' });
+    }
+    
+    if (row.otp !== otp && otp !== '123456') { // Allow static '123456' as fallback
+      return res.status(400).json({ error: 'Invalid OTP' });
+    }
+    
+    // Auto-approve upon submitting the correct OTP!
+    await pool.query(
+      'UPDATE "MobileVerification" SET status = $1, updatedat = NOW() WHERE id = $2',
+      ['APPROVED', row.id]
+    );
+    
+    res.json({ success: true, message: 'Mobile verification approved successfully' });
+  } catch (error) {
+    console.error('submitMobileOtp error:', error);
+    res.status(500).json({ error: 'Failed to submit OTP' });
+  }
+};
+
+const cancelMobileVerification = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    await pool.query('DELETE FROM "MobileVerification" WHERE userid = $1', [userId]);
+    res.json({ success: true, message: 'Verification cancelled' });
+  } catch (error) {
+    console.error('cancelMobileVerification error:', error);
+    res.status(500).json({ error: 'Failed to cancel verification' });
+  }
+};
+
+module.exports = { auth, getProfile, togglePayment, requestUpiVerification, respondToOtpRequest, verifyUpiOtp, getUpiVerificationStatus, addUpi, getUpiAccounts, setPrimaryUpi, deleteUpi, addBank, getBankAccounts, setPrimaryBank, deleteBank, bindMobile, bindTelegram, generateTelegramKey, setTransactionPin, verifyTransactionPin, setPinEnabled, updatePassword, getSupportLinks, createExchangeRequest, getMyExchangeRequests, getMobileVerificationStatus, requestMobileOtp, submitMobileOtp, cancelMobileVerification };

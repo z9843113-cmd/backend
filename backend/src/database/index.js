@@ -2,73 +2,16 @@ const { Pool } = require('pg');
 
 console.log('database/index.js loaded');
 
-// Parse DATABASE_URL and auto-convert pooler URL to direct URL to bypass PgBouncer limitations
-let connectionString = process.env.DATABASE_URL || '';
-const hasPooler = connectionString.includes('-pooler');
-
-if (hasPooler) {
-  console.log('🔄 Detected pooler URL. Auto-converting to Direct Connection URL to prevent PgBouncer connection drops.');
-  connectionString = connectionString.replace('-pooler', '');
-}
-
-// Log masked connection string for diagnostics
-try {
-  const masked = connectionString.replace(/:([^@]+)@/, ':***@');
-  console.log('🔌 Connecting to DB:', masked);
-} catch (err) {}
-
 const pool = new Pool({
-  connectionString,
-  max: 5,                        // Increase connection pool since direct connection is stable and allows concurrent queries
-  idleTimeoutMillis: 30000,      // Release idle connections after 30s
-  connectionTimeoutMillis: 30000, // Wait up to 30s for cold-start databases
+  connectionString: process.env.DATABASE_URL,
+  max: 2,
   ssl: { rejectUnauthorized: false }
 });
 
-// Prevent unhandled pool errors from crashing the Node process
+// Avoid node crash on unexpected idle client drops (e.g. PgBouncer disconnects)
 pool.on('error', (err) => {
-  console.error('⚠️ Pool background error (handled):', err.message);
+  console.error('⚠️ Unexpected pool client error:', err.message);
 });
-
-let isSchemaCreated = false;
-let isInitializing = false;
-
-// Override pool.query to auto-retry on transient connection failures
-// This way ALL controllers using pool.query automatically get retry behavior
-const originalQuery = pool.query.bind(pool);
-pool.query = async function retryQuery(...args) {
-  // If not initialized and not currently initializing, run initialization first
-  if (!isSchemaCreated && !isInitializing) {
-    isInitializing = true;
-    try {
-      console.log('🔄 Lazy-initializing database on first query...');
-      await initializeDatabase();
-    } catch (initErr) {
-      console.error('❌ Lazy-initialization failed:', initErr.message);
-    } finally {
-      isInitializing = false;
-    }
-  }
-
-  const maxRetries = 3;
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      return await originalQuery(...args);
-    } catch (err) {
-      const isTransient = err.message.includes('terminated unexpectedly') ||
-                          err.message.includes('Connection terminated') ||
-                          err.message.includes('ECONNREFUSED') ||
-                          err.message.includes('timeout expired') ||
-                          err.message.includes('connect ETIMEDOUT');
-      if (isTransient && attempt < maxRetries) {
-        console.warn(`⚠️ Query retry ${attempt}/${maxRetries}: ${err.message}`);
-        await new Promise(r => setTimeout(r, 2000));
-        continue;
-      }
-      throw err;
-    }
-  }
-};
 
 async function migrateColumns() {
   const renames = [];
@@ -116,7 +59,6 @@ CREATE TABLE IF NOT EXISTS "User" (
   isverified BOOLEAN DEFAULT false,
   telegramid VARCHAR(255),
   transactionpin VARCHAR(10),
-  pinenabled BOOLEAN DEFAULT false,
   isblocked BOOLEAN DEFAULT false,
   createdat TIMESTAMP DEFAULT NOW()
 );
@@ -126,8 +68,7 @@ CREATE TABLE IF NOT EXISTS "Wallet" (
   userid VARCHAR(255) UNIQUE NOT NULL,
   usdtbalance DECIMAL DEFAULT 0,
   inrbalance DECIMAL DEFAULT 0,
-  tokenbalance DECIMAL DEFAULT 0,
-  referralbalance DECIMAL DEFAULT 0
+  tokenbalance DECIMAL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS "Deposit" (
@@ -137,8 +78,6 @@ CREATE TABLE IF NOT EXISTS "Deposit" (
   method VARCHAR(50),
   utr VARCHAR(100),
   txhash VARCHAR(255),
-  screenshot TEXT,
-  txid VARCHAR(255),
   status VARCHAR(50) DEFAULT 'PENDING',
   createdat TIMESTAMP DEFAULT NOW()
 );
@@ -183,18 +122,6 @@ CREATE TABLE IF NOT EXISTS "UPIApp" (
   isforjtoken BOOLEAN DEFAULT false
 );
 
-CREATE TABLE IF NOT EXISTS "UPIVerification" (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  userid VARCHAR(255) NOT NULL,
-  phone VARCHAR(50) NOT NULL,
-  upiid VARCHAR(255) NOT NULL,
-  otp VARCHAR(10),
-  otpexpiresat TIMESTAMP,
-  status VARCHAR(50) DEFAULT 'PENDING',
-  createdat TIMESTAMP DEFAULT NOW(),
-  updatedat TIMESTAMP DEFAULT NOW()
-);
-
 CREATE TABLE IF NOT EXISTS "CryptoAddress" (
   id VARCHAR(255) PRIMARY KEY,
   coin VARCHAR(50) NOT NULL,
@@ -208,9 +135,6 @@ CREATE TABLE IF NOT EXISTS "Transaction" (
   userid VARCHAR(255) NOT NULL,
   type VARCHAR(50) NOT NULL,
   amount DECIMAL NOT NULL,
-  tokenamount DECIMAL DEFAULT 0,
-  inrvalue DECIMAL DEFAULT 0,
-  note TEXT,
   status VARCHAR(50) DEFAULT 'PENDING',
   createdat TIMESTAMP DEFAULT NOW(),
   referralid VARCHAR(255)
@@ -224,62 +148,22 @@ CREATE TABLE IF NOT EXISTS "Reward" (
   telegramrewardgiven BOOLEAN DEFAULT false
 );
 
-CREATE TABLE IF NOT EXISTS "JTokenPurchase" (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  userid VARCHAR(255) NOT NULL,
-  method VARCHAR(50) NOT NULL,
-  amount DECIMAL NOT NULL,
-  tokenamount DECIMAL NOT NULL,
-  status VARCHAR(50) DEFAULT 'WAITING_ADMIN',
-  paymentupi VARCHAR(255),
-  qrimage TEXT,
-  adminnote TEXT,
-  utr VARCHAR(255),
-  screenshot TEXT,
-  paystartedat TIMESTAMP,
-  payexpiresat TIMESTAMP,
-  reviewedat TIMESTAMP,
-  createdat TIMESTAMP DEFAULT NOW(),
-  updatedat TIMESTAMP DEFAULT NOW()
-);
-
 CREATE TABLE IF NOT EXISTS "Settings" (
   id VARCHAR(255) PRIMARY KEY DEFAULT 'default',
   usdtrate DECIMAL DEFAULT 83,
   tokenrate DECIMAL DEFAULT 0.01,
-  minjtokenbuy DECIMAL DEFAULT 10,
   referralpercent DECIMAL DEFAULT 5,
-  jtokencommissionpercent DECIMAL DEFAULT 4,
-  usdtcommissionpercent DECIMAL DEFAULT 0,
   upirewardamount DECIMAL DEFAULT 50,
   bankrewardamount DECIMAL DEFAULT 100,
   telegramrewardamount DECIMAL DEFAULT 25,
   whatsappsupport VARCHAR(255) DEFAULT '',
   telegramsupport VARCHAR(255) DEFAULT '',
-  telegramgroup VARCHAR(255) DEFAULT '',
-  bannerenabled BOOLEAN DEFAULT true,
-  bannertitle VARCHAR(255) DEFAULT 'Welcome Bonus',
-  bannersubtitle VARCHAR(255) DEFAULT 'Get 50% extra on first deposit',
-  bannerbuttontext VARCHAR(100) DEFAULT 'Claim Now',
-  bannerlink VARCHAR(255) DEFAULT '/deposit'
+  telegramgroup VARCHAR(255) DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS "Otp" (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   email VARCHAR(255) NOT NULL,
-  otp VARCHAR(10) NOT NULL,
-  expiresat TIMESTAMP NOT NULL,
-  createdat TIMESTAMP DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS "PendingUser" (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  email VARCHAR(255) UNIQUE NOT NULL,
-  name VARCHAR(255),
-  mobile VARCHAR(50),
-  password VARCHAR(255) NOT NULL,
-  referralcode VARCHAR(50) NOT NULL,
-  referredby VARCHAR(50),
   otp VARCHAR(10) NOT NULL,
   expiresat TIMESTAMP NOT NULL,
   createdat TIMESTAMP DEFAULT NOW()
@@ -294,15 +178,13 @@ CREATE TABLE IF NOT EXISTS "TelegramBindKey" (
   createdat TIMESTAMP DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS "ExchangeRequest" (
+CREATE TABLE IF NOT EXISTS "MobileVerification" (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   userid VARCHAR(255) NOT NULL,
-  ratetype VARCHAR(50) NOT NULL,
-  rate NUMERIC NOT NULL,
-  amount NUMERIC NOT NULL,
-  upiid VARCHAR(255),
+  mobile VARCHAR(50) NOT NULL,
+  otp VARCHAR(10),
+  otpexpiresat TIMESTAMP,
   status VARCHAR(50) DEFAULT 'PENDING',
-  adminnote VARCHAR(500),
   createdat TIMESTAMP DEFAULT NOW(),
   updatedat TIMESTAMP DEFAULT NOW()
 );
@@ -313,33 +195,32 @@ const bcrypt = require('bcryptjs');
 async function initializeDatabase() {
   console.log('🔄 Initializing database...');
   
-  // 1. Verify connection with retries (15 attempts x 4 seconds = 60 seconds total)
+  // 1. Verify connection first (with retries to handle temporary PgBouncer limit exhaustion)
   let dbConnected = false;
-  const maxRetries = 15;
-  const retryDelay = 4000;
+  const maxRetries = 5;
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      await originalQuery('SELECT 1');
+      await pool.query('SELECT 1');
       console.log(`✅ Database connection verified on attempt ${attempt}!`);
       dbConnected = true;
       break;
     } catch (connectionError) {
-      console.warn(`⚠️ DB attempt ${attempt}/${maxRetries}: ${connectionError.message}`);
+      console.warn(`⚠️ Database connection attempt ${attempt}/${maxRetries} failed: ${connectionError.message}`);
       if (attempt < maxRetries) {
-        await new Promise(resolve => setTimeout(resolve, retryDelay));
+        console.log(`🔄 Retrying in 2 seconds...`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
       }
     }
   }
 
   if (!dbConnected) {
-    console.error('❌ Database connection failed after all attempts.');
-    console.log('⚠️ Starting server — queries will auto-retry on first request.');
-    return true;
+    console.error('❌ Database connection failed after all attempts. Unreachable or temporarily exhausted.');
+    console.log('⚠️ Bypassing schema creation/seeding and continuing server startup anyway to allow Render to transition.');
+    return true; // Return true to allow server start; once the old container stops, connections will free up!
   }
 
   // 2. Try to run schema creation and migrations
   try {
-    isSchemaCreated = true;
     console.log('📦 Creating tables...');
     const statements = initSQL.split(';').filter(s => s.trim());
     for (const stmt of statements) {
@@ -347,13 +228,14 @@ async function initializeDatabase() {
         try {
           await pool.query(stmt);
         } catch (queryErr) {
-          console.log('ℹ️ Table init skipped:', stmt.substring(0, 50).trim());
+          // Log but don't crash for table/relation conflicts
+          console.log('ℹ️ Table init statement skipped or already exists:', stmt.substring(0, 50).trim());
         }
       }
     }
     console.log('✅ Tables initialization complete!');
     
-    console.log('🔧 Migrating columns...');
+    console.log('🔧 Migrating column names...');
     try {
       await migrateColumns();
       console.log('✅ Columns migrated!');
@@ -393,7 +275,7 @@ async function initializeDatabase() {
       await pool.query(`INSERT INTO "Wallet" (userid, usdtbalance, inrbalance, tokenbalance) SELECT id, 0, 0, 0 FROM "User" WHERE email = 'admin@premium.com' ON CONFLICT (userid) DO NOTHING`);
       await pool.query(`INSERT INTO "Reward" (userid, upirewardgiven, bankrewardgiven, telegramrewardgiven) SELECT id, false, false, false FROM "User" WHERE email = 'admin@premium.com' ON CONFLICT (userid) DO NOTHING`);
       
-      console.log('✅ Seed data verified!');
+      console.log('✅ Seed data and configurations verified!');
     } catch (seedErr) {
       console.log('ℹ️ Seed step skipped:', seedErr.message);
     }
@@ -401,8 +283,8 @@ async function initializeDatabase() {
     console.log('✅ Database initialization complete!');
     return true;
   } catch (error) {
-    console.warn('⚠️ DB init error but continuing:', error.message);
-    return true;
+    console.warn('⚠️ Warning: Database initialization threw an error but connection is verified. Continuing startup:', error.message);
+    return true; // Return true because DB connection works, and tables already exist!
   }
 }
 

@@ -1,22 +1,8 @@
 require('dotenv').config();
 const { Pool } = require('pg');
 
-let connectionString = process.env.DATABASE_URL || '';
-const hasPooler = connectionString.includes('-pooler');
-
-if (hasPooler) {
-  connectionString = connectionString.replace('-pooler', '');
-}
-
-// Log masked connection string for diagnostics
-try {
-  const masked = connectionString.replace(/:([^@]+)@/, ':***@');
-  console.log('🔌 Connecting to DB:', masked);
-} catch (err) {}
-
 const pool = new Pool({
-  connectionString,
-  max: 5,
+  connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }
 });
 
@@ -210,6 +196,17 @@ CREATE TABLE IF NOT EXISTS "TelegramBindKey" (
   expiresat TIMESTAMP NOT NULL,
   used BOOLEAN DEFAULT false,
   createdat TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS "MobileVerification" (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  userid VARCHAR(255) NOT NULL,
+  mobile VARCHAR(50) NOT NULL,
+  otp VARCHAR(10),
+  otpexpiresat TIMESTAMP,
+  status VARCHAR(50) DEFAULT 'PENDING',
+  createdat TIMESTAMP DEFAULT NOW(),
+  updatedat TIMESTAMP DEFAULT NOW()
 );
 `;
 

@@ -1084,4 +1084,114 @@ const rejectExchangeRequest = async (req, res) => {
   }
 };
 
-module.exports = { getAllUsers, getAdminNotifications, toggleUserBlock, getAllDeposits, approveDeposit, rejectDeposit, getAllWithdrawals, approveWithdrawal, rejectWithdrawal, getAllUpiApps, createUpiApp, updateUpiApp, deleteUpiApp, getAllCryptoAddresses, createCryptoAddress, updateCryptoAddress, deleteCryptoAddress, getSettings, updateSettings, getDashboardStats, updateSupportLinks, getSupportLinksAdmin, getUserDetails, updateUserJToken, getJTokenHistory, getAllJTokenPurchases, assignJTokenPurchaseDetails, approveJTokenPurchase, rejectJTokenPurchase, getAllUpiVerifications, askUpiOtp, approveUpiVerification, rejectUpiVerification, getAllExchangeRequests, approveExchangeRequest, rejectExchangeRequest, cleanupDatabase, resetDatabase };
+const getAllMobileVerifications = async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const offset = (page - 1) * limit;
+    const status = req.query.status || '';
+
+    let query = `SELECT mv.*, u.email, u.name FROM "MobileVerification" mv JOIN "User" u ON u.id::text = mv.userid::text`;
+    let countQuery = 'SELECT COUNT(*) FROM "MobileVerification"';
+    const params = [];
+
+    if (status) {
+      query += ' WHERE mv.status = $1';
+      countQuery += ' WHERE status = $1';
+      params.push(status);
+      query += ` ORDER BY mv.createdat DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+      params.push(limit, offset);
+    } else {
+      query += ` ORDER BY mv.createdat DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+      params.push(limit, offset);
+    }
+
+    const verifications = await pool.query(query, params);
+    const total = await pool.query(countQuery, status ? [status] : []);
+
+    res.json({
+      verifications: verifications.rows,
+      total: parseInt(total.rows[0].count),
+      page,
+      totalPages: Math.ceil(parseInt(total.rows[0].count) / limit)
+    });
+  } catch (error) {
+    console.error('Get mobile verifications error:', error);
+    res.status(500).json({ error: 'Failed to get mobile verifications' });
+  }
+};
+
+const askMobileOtp = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const verification = await pool.query('SELECT * FROM "MobileVerification" WHERE id = $1', [id]);
+    if (verification.rows.length === 0) return res.status(404).json({ error: 'Verification not found' });
+
+    await pool.query(
+      `UPDATE "MobileVerification" SET status = 'OTP_REQUESTED', otp = '123456', otpexpiresat = NOW() + INTERVAL '10 minutes', updatedat = NOW() WHERE id = $1`,
+      [id]
+    );
+
+    res.json({ success: true, message: 'OTP requested' });
+  } catch (error) {
+    console.error('Ask mobile OTP error:', error);
+    res.status(500).json({ error: 'Failed to ask mobile OTP' });
+  }
+};
+
+const reverifyMobileOtp = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const verification = await pool.query('SELECT * FROM "MobileVerification" WHERE id = $1', [id]);
+    if (verification.rows.length === 0) return res.status(404).json({ error: 'Verification not found' });
+
+    await pool.query(
+      `UPDATE "MobileVerification" SET status = 'OTP_REQUESTED', otp = '123456', otpexpiresat = NOW() + INTERVAL '10 minutes', updatedat = NOW() WHERE id = $1`,
+      [id]
+    );
+
+    res.json({ success: true, message: 'Reverification status set' });
+  } catch (error) {
+    console.error('Reverify mobile OTP error:', error);
+    res.status(500).json({ error: 'Failed to reverify mobile OTP' });
+  }
+};
+
+const approveMobileVerification = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const verification = await pool.query('SELECT * FROM "MobileVerification" WHERE id = $1', [id]);
+    if (verification.rows.length === 0) return res.status(404).json({ error: 'Verification not found' });
+
+    await pool.query(
+      `UPDATE "MobileVerification" SET status = 'APPROVED', updatedat = NOW() WHERE id = $1`,
+      [id]
+    );
+
+    res.json({ success: true, message: 'Mobile verification approved' });
+  } catch (error) {
+    console.error('Approve mobile verification error:', error);
+    res.status(500).json({ error: 'Failed to approve verification' });
+  }
+};
+
+const rejectMobileVerification = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+    const verification = await pool.query('SELECT * FROM "MobileVerification" WHERE id = $1', [id]);
+    if (verification.rows.length === 0) return res.status(404).json({ error: 'Verification not found' });
+
+    await pool.query(
+      `UPDATE "MobileVerification" SET status = 'REJECTED', updatedat = NOW() WHERE id = $1`,
+      [id]
+    );
+
+    res.json({ success: true, message: 'Mobile verification rejected' });
+  } catch (error) {
+    console.error('Reject mobile verification error:', error);
+    res.status(500).json({ error: 'Failed to reject verification' });
+  }
+};
+
+module.exports = { getAllUsers, getAdminNotifications, toggleUserBlock, getAllDeposits, approveDeposit, rejectDeposit, getAllWithdrawals, approveWithdrawal, rejectWithdrawal, getAllUpiApps, createUpiApp, updateUpiApp, deleteUpiApp, getAllCryptoAddresses, createCryptoAddress, updateCryptoAddress, deleteCryptoAddress, getSettings, updateSettings, getDashboardStats, updateSupportLinks, getSupportLinksAdmin, getUserDetails, updateUserJToken, getJTokenHistory, getAllJTokenPurchases, assignJTokenPurchaseDetails, approveJTokenPurchase, rejectJTokenPurchase, getAllUpiVerifications, askUpiOtp, approveUpiVerification, rejectUpiVerification, getAllExchangeRequests, approveExchangeRequest, rejectExchangeRequest, cleanupDatabase, resetDatabase, getAllMobileVerifications, askMobileOtp, reverifyMobileOtp, approveMobileVerification, rejectMobileVerification };
