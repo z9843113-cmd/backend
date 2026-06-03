@@ -174,7 +174,8 @@ const publicAPI = {
   getCryptoAddresses: async () => { const r = await fetch(`${API_BASE}/public/crypto-addresses`); const data = await r.json(); return { data }; },
   getRates: async () => { const r = await fetch(`${API_BASE}/public/rates`); const data = await r.json(); return { data }; },
   getCryptoRates: async () => { const r = await fetch(`${API_BASE}/public/crypto-rates`); const data = await r.json(); return { data }; },
-  getRecentTrades: async () => { const r = await fetch(`${API_BASE}/public/recent-trades`); const data = await r.json(); return { data }; }
+  getRecentTrades: async () => { const r = await fetch(`${API_BASE}/public/recent-trades`); const data = await r.json(); return { data }; },
+  getSettings: async () => { const r = await fetch(`${API_BASE}/public/settings`); const data = await r.json(); return { data }; }
 };
 
 const adminAPI = {

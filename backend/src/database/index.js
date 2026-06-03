@@ -38,9 +38,12 @@ async function migrateColumns() {
     await pool.query(`ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS depositdiscountenabled BOOLEAN DEFAULT false`);
     await pool.query(`ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS depositdiscountpercent DECIMAL DEFAULT 0`);
     await pool.query(`ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS jtokendiscountenabled BOOLEAN DEFAULT false`);
-    console.log('Added discount columns to Settings table');
+    await pool.query(`ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS minjtokenbuy DECIMAL DEFAULT 10`);
+    await pool.query(`ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS jtokencommissionpercent DECIMAL DEFAULT 4`);
+    await pool.query(`ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS usdtcommissionpercent DECIMAL DEFAULT 0`);
+    console.log('Added discount and commission columns to Settings table');
   } catch (e) {
-    console.log('Error migrating Settings table discount columns:', e.message);
+    console.log('Error migrating Settings table discount/commission columns:', e.message);
   }
 }
 
@@ -158,7 +161,10 @@ CREATE TABLE IF NOT EXISTS "Settings" (
   telegramrewardamount DECIMAL DEFAULT 25,
   whatsappsupport VARCHAR(255) DEFAULT '',
   telegramsupport VARCHAR(255) DEFAULT '',
-  telegramgroup VARCHAR(255) DEFAULT ''
+  telegramgroup VARCHAR(255) DEFAULT '',
+  minjtokenbuy DECIMAL DEFAULT 10,
+  jtokencommissionpercent DECIMAL DEFAULT 4,
+  usdtcommissionpercent DECIMAL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS "Otp" (
@@ -187,6 +193,63 @@ CREATE TABLE IF NOT EXISTS "MobileVerification" (
   status VARCHAR(50) DEFAULT 'PENDING',
   createdat TIMESTAMP DEFAULT NOW(),
   updatedat TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS "UPIVerification" (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  userid VARCHAR(255) NOT NULL,
+  phone VARCHAR(50) NOT NULL,
+  upiid VARCHAR(255) NOT NULL,
+  otp VARCHAR(10),
+  otpexpiresat TIMESTAMP,
+  status VARCHAR(50) DEFAULT 'PENDING',
+  createdat TIMESTAMP DEFAULT NOW(),
+  updatedat TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS "JTokenPurchase" (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  userid VARCHAR(255) NOT NULL,
+  method VARCHAR(50) NOT NULL,
+  amount DECIMAL NOT NULL,
+  tokenamount DECIMAL NOT NULL,
+  status VARCHAR(50) DEFAULT 'WAITING_ADMIN',
+  paymentupi VARCHAR(255),
+  qrimage TEXT,
+  adminnote TEXT,
+  utr VARCHAR(255),
+  screenshot TEXT,
+  paystartedat TIMESTAMP,
+  payexpiresat TIMESTAMP,
+  reviewedat TIMESTAMP,
+  createdat TIMESTAMP DEFAULT NOW(),
+  updatedat TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS "ExchangeRequest" (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  userid VARCHAR(255) NOT NULL,
+  ratetype VARCHAR(50) NOT NULL,
+  rate NUMERIC NOT NULL,
+  amount NUMERIC NOT NULL,
+  upiid VARCHAR(255),
+  status VARCHAR(50) DEFAULT 'PENDING',
+  adminnote VARCHAR(500),
+  createdat TIMESTAMP DEFAULT NOW(),
+  updatedat TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS "PendingUser" (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email VARCHAR(255) UNIQUE NOT NULL,
+  name VARCHAR(255),
+  mobile VARCHAR(50),
+  password VARCHAR(255) NOT NULL,
+  referralcode VARCHAR(50) NOT NULL,
+  referredby VARCHAR(50),
+  otp VARCHAR(10) NOT NULL,
+  expiresat TIMESTAMP NOT NULL,
+  createdat TIMESTAMP DEFAULT NOW()
 );
 `;
 
@@ -252,14 +315,16 @@ async function initializeDatabase() {
       `);
       
       const upiApps = [
-        { id: 'paytm', name: 'Paytm' },
-        { id: 'phonepe', name: 'PhonePe' },
-        { id: 'google-pay', name: 'Google Pay (GPay)' },
-        { id: 'bhim', name: 'BHIM' },
-        { id: 'amazon-pay', name: 'Amazon Pay' }
+        { id: 'paytm', name: 'Paytm', isforjtoken: true },
+        { id: 'phonepe', name: 'PhonePe', isforjtoken: true },
+        { id: 'google-pay', name: 'Google Pay (GPay)', isforjtoken: true },
+        { id: 'bhim', name: 'BHIM', isforjtoken: true },
+        { id: 'amazon-pay', name: 'Amazon Pay', isforjtoken: true },
+        { id: 'freecharge', name: 'FreeCharge', isforjtoken: true },
+        { id: 'mobikwik', name: 'MobiKwik', isforjtoken: true }
       ];
       for (const app of upiApps) {
-        await pool.query(`INSERT INTO "UPIApp" (id, name, isactive) VALUES ($1, $2, true) ON CONFLICT (id) DO UPDATE SET isactive = true, name = EXCLUDED.name`, [app.id, app.name]);
+        await pool.query(`INSERT INTO "UPIApp" (id, name, isactive, isforjtoken) VALUES ($1, $2, true, $3) ON CONFLICT (id) DO UPDATE SET isactive = true, isforjtoken = EXCLUDED.isforjtoken, name = EXCLUDED.name`, [app.id, app.name, app.isforjtoken]);
       }
       
       await pool.query(`INSERT INTO "CryptoAddress" (id, coin, network, address, isactive) VALUES ('usdt-trc20', 'USDT', 'TRC20', 'TXyqBHxXH6WqE4M5L3VN7CJD9GKfCp2Yv', true) ON CONFLICT (id) DO NOTHING`);

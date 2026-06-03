@@ -24,6 +24,8 @@ const BuyJToken = () => {
   const [selectedMethod, setSelectedMethod] = useState('');
   const [upiApps, setUpiApps] = useState([]);
   const [pendingRequest, setPendingRequest] = useState(null);
+  const [jtokenCommissionPercent, setJtokenCommissionPercent] = useState(4);
+  const [tokenRate, setTokenRate] = useState(1);
 
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text);
@@ -42,11 +44,12 @@ const BuyJToken = () => {
   const fetchRequestData = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      const [walletRes, requestsRes, upiRes, userUpiRes] = await Promise.all([
+      const [walletRes, requestsRes, upiRes, userUpiRes, settingsRes] = await Promise.all([
         walletAPI.getWallet(),
         jTokenPurchaseAPI.getMyRequests(),
         publicAPI.getUpiApps(),
-        userAPI.getUpiAccounts()
+        userAPI.getUpiAccounts(),
+        publicAPI.getSettings()
       ]);
       setWallet(walletRes?.data || walletRes || null);
       const allRequests = requestsRes?.data?.purchases || requestsRes?.purchases || requestsRes?.data || requestsRes || [];
@@ -54,6 +57,11 @@ const BuyJToken = () => {
       const req = allRequests.find(r => !['APPROVED', 'REJECTED', 'CANCELLED', 'EXPIRED'].includes(r.status));
       if (req) setRequest(req);
       else setRequest(null);
+
+      // Save public settings values
+      const settings = settingsRes || {};
+      setJtokenCommissionPercent(parseFloat(settings.jtokencommissionpercent ?? 4));
+      setTokenRate(parseFloat(settings.tokenrate || 1));
       
       // Use verified/active UPI accounts
       const userUpiAccounts = (userUpiRes?.data || userUpiRes || []).filter(
@@ -67,18 +75,26 @@ const BuyJToken = () => {
         .map(u => (u.upiid || u.upiId || u.upi_id || '').toLowerCase())
         .filter(Boolean);
       
-      // Only show app that is set for JToken purchases (isForJToken)
+      // Filter apps set for JToken purchases (case-insensitive flag check)
       let jtokenApps = [];
-      
-      const jtokenApp = allApps.find(app => app.isForJToken === true || app.isForJToken === 'true');
-      if (jtokenApp && userUpiIds.length > 0) {
-        jtokenApps = [jtokenApp];
+      const filteredApps = allApps.filter(app => {
+        const flag = app.isforjtoken ?? app.isForJToken;
+        return flag === true || flag === 'true';
+      });
+
+      if (userUpiIds.length > 0) {
+        jtokenApps = filteredApps;
       }
       
       setUpiApps(jtokenApps);
-      if (jtokenApps.length > 0) setSelectedMethod(jtokenApps[0].id);
-    } catch {
-      console.error('Failed to fetch data');
+      if (jtokenApps.length > 0) {
+        setSelectedMethod(prev => {
+          if (prev && jtokenApps.some(app => app.id === prev)) return prev;
+          return jtokenApps[0].id;
+        });
+      }
+    } catch (e) {
+      console.error('Failed to fetch data', e);
     } finally {
       if (!silent) setLoading(false);
     }
@@ -266,6 +282,24 @@ const BuyJToken = () => {
             </div>
             
             <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Enter amount (min ₹10)" className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-2xl px-4 py-4 text-white placeholder-gray-500 focus:border-[#D4AF37] focus:outline-none text-lg" />
+            
+            {amount && parseFloat(amount) > 0 && (
+              <div className="mt-4 bg-[#0a0a0a] border border-[#2a2a2a] rounded-2xl p-4 space-y-3">
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-gray-400">Commission ({jtokenCommissionPercent}%):</span>
+                  <span className="text-white font-semibold">+₹{(parseFloat(amount) * jtokenCommissionPercent / 100).toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-gray-400">Total:</span>
+                  <span className="text-white font-semibold">₹{(parseFloat(amount) + (parseFloat(amount) * jtokenCommissionPercent / 100)).toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between items-center text-sm pt-2 border-t border-[#2a2a2a]">
+                  <span className="text-gray-400">You will get:</span>
+                  <span className="text-[#D4AF37] font-bold">{(parseFloat(amount) / tokenRate).toFixed(0)} JToken</span>
+                </div>
+              </div>
+            )}
+
             {message && <p className="text-red-400 text-sm mt-3">{message}</p>}
             <button onClick={handleCreate} disabled={submitting} className="w-full mt-5 py-4 bg-gradient-to-r from-[#D4AF37] to-[#FFD700] rounded-2xl font-bold text-black disabled:opacity-50">
               {submitting ? 'Creating...' : 'Create Request'}

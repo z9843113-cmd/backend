@@ -84,7 +84,8 @@ CREATE TABLE IF NOT EXISTS "UPIApp" (
   id VARCHAR(255) PRIMARY KEY,
   name VARCHAR(255) NOT NULL,
   iconurl VARCHAR(255),
-  isactive BOOLEAN DEFAULT true
+  isactive BOOLEAN DEFAULT true,
+  isforjtoken BOOLEAN DEFAULT false
 );
 
 CREATE TABLE IF NOT EXISTS "UPIVerification" (
@@ -228,19 +229,20 @@ async function initializeDatabase() {
     `);
     
     const upiApps = [
-      { id: 'mobikwik', name: 'MobiKwik' },
-      { id: 'freecharge', name: 'FreeCharge' },
-      { id: 'paytm', name: 'Paytm' },
-      { id: 'phonepe', name: 'PhonePe' },
-      { id: 'google-pay', name: 'Google Pay' },
-      { id: 'bhim', name: 'BHIM' },
-      { id: 'amazon-pay', name: 'Amazon Pay' }
+      { id: 'mobikwik', name: 'MobiKwik', isforjtoken: true },
+      { id: 'freecharge', name: 'FreeCharge', isforjtoken: true },
+      { id: 'paytm', name: 'Paytm', isforjtoken: true },
+      { id: 'phonepe', name: 'PhonePe', isforjtoken: true },
+      { id: 'google-pay', name: 'Google Pay', isforjtoken: true },
+      { id: 'bhim', name: 'BHIM', isforjtoken: true },
+      { id: 'amazon-pay', name: 'Amazon Pay', isforjtoken: true }
     ];
     for (const app of upiApps) {
-      await pool.query(`INSERT INTO "UPIApp" (id, name, isactive) VALUES ($1, $2, true) ON CONFLICT (id) DO NOTHING`, [app.id, app.name]);
+      await pool.query(`INSERT INTO "UPIApp" (id, name, isactive, isforjtoken) VALUES ($1, $2, true, $3) ON CONFLICT (id) DO UPDATE SET isactive = true, isforjtoken = EXCLUDED.isforjtoken, name = EXCLUDED.name`, [app.id, app.name, app.isforjtoken]);
     }
     
     try {
+      await pool.query(`ALTER TABLE "UPIApp" ADD COLUMN IF NOT EXISTS isforjtoken BOOLEAN DEFAULT false`);
       await pool.query(`ALTER TABLE "Deposit" ADD COLUMN IF NOT EXISTS screenshot TEXT`);
       await pool.query(`ALTER TABLE "Deposit" ADD COLUMN IF NOT EXISTS txid VARCHAR(255)`);
       await pool.query(`ALTER TABLE "Deposit" ADD COLUMN IF NOT EXISTS cryptoid VARCHAR(255)`);

@@ -201,4 +201,14 @@ function getTimeAgo(date) {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
+router.get('/settings', async (req, res) => {
+  try {
+    const settings = await pool.query('SELECT * FROM "Settings" WHERE id = \'default\'');
+    res.json(settings.rows[0] || {});
+  } catch (error) {
+    console.error('Get public settings error:', error);
+    res.status(500).json({ error: 'Failed to fetch settings' });
+  }
+});
+
 module.exports = router;

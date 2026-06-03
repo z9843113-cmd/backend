@@ -67,10 +67,12 @@ const createJTokenPurchase = async (req, res) => {
       return res.status(400).json({ error: 'Selected payment method is not available' });
     }
 
-    const settings = await pool.query('SELECT tokenrate, minjtokenbuy FROM "Settings" LIMIT 1');
+    const settings = await pool.query('SELECT tokenrate, minjtokenbuy, jtokencommissionpercent FROM "Settings" LIMIT 1');
     const tokenRate = parseFloat(settings.rows[0]?.tokenrate || 0.01);
     const minJTokenBuy = parseFloat(settings.rows[0]?.minjtokenbuy || 10);
+    const commissionPercent = parseFloat(settings.rows[0]?.jtokencommissionpercent ?? 4);
     const tokenAmount = inrAmount / tokenRate;
+    const totalAmount = inrAmount + (inrAmount * commissionPercent / 100);
 
     if (inrAmount < minJTokenBuy) {
       return res.status(400).json({ error: `Minimum buy amount is Rs ${minJTokenBuy.toFixed(2)}` });
@@ -79,7 +81,7 @@ const createJTokenPurchase = async (req, res) => {
     const created = await pool.query(
       `INSERT INTO "JTokenPurchase" (userid, method, amount, tokenamount, status, createdat, updatedat)
        VALUES ($1, $2, $3, $4, 'WAITING_ADMIN', NOW(), NOW()) RETURNING *`,
-      [req.user.id, String(method).toUpperCase(), inrAmount, tokenAmount]
+      [req.user.id, String(method).toUpperCase(), totalAmount, tokenAmount]
     );
 
     res.status(201).json({
