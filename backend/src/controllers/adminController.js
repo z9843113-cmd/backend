@@ -597,11 +597,6 @@ const assignJTokenPurchaseDetails = async (req, res) => {
       return res.status(400).json({ error: 'Payment details already assigned or request already processed' });
     }
 
-    const user = await pool.query('SELECT paymentenabled FROM "User" WHERE id::text = $1', [purchase.rows[0].userid]);
-    if (user.rows.length > 0 && user.rows[0].paymentenabled === false) {
-      return res.status(400).json({ error: 'User has disabled receiving payments. Ask user to enable payments from their app.' });
-    }
-
     let note = adminNote || '';
     let method = 'UPI';
     
@@ -638,12 +633,6 @@ const approveJTokenPurchase = async (req, res) => {
     if (row.status !== 'PAYMENT_SUBMITTED') {
       await client.query('ROLLBACK');
       return res.status(400).json({ error: 'Payment proof not submitted yet' });
-    }
-
-    const user = await client.query('SELECT paymentenabled FROM "User" WHERE id::text = $1', [row.userid]);
-    if (user.rows.length > 0 && user.rows[0].paymentenabled === false) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ error: 'User has disabled receiving payments. Ask user to enable payments from their app.' });
     }
 
     const userId = String(row.userid);
