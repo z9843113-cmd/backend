@@ -47,7 +47,7 @@ const register = async (req, res) => {
     res.status(201).json({ message: 'OTP sent to your email for verification' });
   } catch (error) {
     console.error('Register error:', error.message);
-    res.status(500).json({ error: 'Registration failed' });
+    res.status(500).json({ error: 'Registration failed', detail: error.message });
   }
 };
 
@@ -106,8 +106,8 @@ const verifyOtp = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Verify OTP error:', error);
-    res.status(500).json({ error: 'Verification failed' });
+    console.error('Verify OTP error:', error.message);
+    res.status(500).json({ error: 'Verification failed', detail: error.message });
   }
 };
 

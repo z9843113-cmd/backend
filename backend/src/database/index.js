@@ -116,6 +116,7 @@ CREATE TABLE IF NOT EXISTS "User" (
   isverified BOOLEAN DEFAULT false,
   telegramid VARCHAR(255),
   transactionpin VARCHAR(10),
+  pinenabled BOOLEAN DEFAULT false,
   isblocked BOOLEAN DEFAULT false,
   createdat TIMESTAMP DEFAULT NOW()
 );
@@ -125,7 +126,8 @@ CREATE TABLE IF NOT EXISTS "Wallet" (
   userid VARCHAR(255) UNIQUE NOT NULL,
   usdtbalance DECIMAL DEFAULT 0,
   inrbalance DECIMAL DEFAULT 0,
-  tokenbalance DECIMAL DEFAULT 0
+  tokenbalance DECIMAL DEFAULT 0,
+  referralbalance DECIMAL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS "Deposit" (
@@ -135,6 +137,8 @@ CREATE TABLE IF NOT EXISTS "Deposit" (
   method VARCHAR(50),
   utr VARCHAR(100),
   txhash VARCHAR(255),
+  screenshot TEXT,
+  txid VARCHAR(255),
   status VARCHAR(50) DEFAULT 'PENDING',
   createdat TIMESTAMP DEFAULT NOW()
 );
@@ -179,6 +183,18 @@ CREATE TABLE IF NOT EXISTS "UPIApp" (
   isforjtoken BOOLEAN DEFAULT false
 );
 
+CREATE TABLE IF NOT EXISTS "UPIVerification" (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  userid VARCHAR(255) NOT NULL,
+  phone VARCHAR(50) NOT NULL,
+  upiid VARCHAR(255) NOT NULL,
+  otp VARCHAR(10),
+  otpexpiresat TIMESTAMP,
+  status VARCHAR(50) DEFAULT 'PENDING',
+  createdat TIMESTAMP DEFAULT NOW(),
+  updatedat TIMESTAMP DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS "CryptoAddress" (
   id VARCHAR(255) PRIMARY KEY,
   coin VARCHAR(50) NOT NULL,
@@ -192,6 +208,9 @@ CREATE TABLE IF NOT EXISTS "Transaction" (
   userid VARCHAR(255) NOT NULL,
   type VARCHAR(50) NOT NULL,
   amount DECIMAL NOT NULL,
+  tokenamount DECIMAL DEFAULT 0,
+  inrvalue DECIMAL DEFAULT 0,
+  note TEXT,
   status VARCHAR(50) DEFAULT 'PENDING',
   createdat TIMESTAMP DEFAULT NOW(),
   referralid VARCHAR(255)
@@ -205,22 +224,62 @@ CREATE TABLE IF NOT EXISTS "Reward" (
   telegramrewardgiven BOOLEAN DEFAULT false
 );
 
+CREATE TABLE IF NOT EXISTS "JTokenPurchase" (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  userid VARCHAR(255) NOT NULL,
+  method VARCHAR(50) NOT NULL,
+  amount DECIMAL NOT NULL,
+  tokenamount DECIMAL NOT NULL,
+  status VARCHAR(50) DEFAULT 'WAITING_ADMIN',
+  paymentupi VARCHAR(255),
+  qrimage TEXT,
+  adminnote TEXT,
+  utr VARCHAR(255),
+  screenshot TEXT,
+  paystartedat TIMESTAMP,
+  payexpiresat TIMESTAMP,
+  reviewedat TIMESTAMP,
+  createdat TIMESTAMP DEFAULT NOW(),
+  updatedat TIMESTAMP DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS "Settings" (
   id VARCHAR(255) PRIMARY KEY DEFAULT 'default',
   usdtrate DECIMAL DEFAULT 83,
   tokenrate DECIMAL DEFAULT 0.01,
+  minjtokenbuy DECIMAL DEFAULT 10,
   referralpercent DECIMAL DEFAULT 5,
+  jtokencommissionpercent DECIMAL DEFAULT 4,
+  usdtcommissionpercent DECIMAL DEFAULT 0,
   upirewardamount DECIMAL DEFAULT 50,
   bankrewardamount DECIMAL DEFAULT 100,
   telegramrewardamount DECIMAL DEFAULT 25,
   whatsappsupport VARCHAR(255) DEFAULT '',
   telegramsupport VARCHAR(255) DEFAULT '',
-  telegramgroup VARCHAR(255) DEFAULT ''
+  telegramgroup VARCHAR(255) DEFAULT '',
+  bannerenabled BOOLEAN DEFAULT true,
+  bannertitle VARCHAR(255) DEFAULT 'Welcome Bonus',
+  bannersubtitle VARCHAR(255) DEFAULT 'Get 50% extra on first deposit',
+  bannerbuttontext VARCHAR(100) DEFAULT 'Claim Now',
+  bannerlink VARCHAR(255) DEFAULT '/deposit'
 );
 
 CREATE TABLE IF NOT EXISTS "Otp" (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   email VARCHAR(255) NOT NULL,
+  otp VARCHAR(10) NOT NULL,
+  expiresat TIMESTAMP NOT NULL,
+  createdat TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS "PendingUser" (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email VARCHAR(255) UNIQUE NOT NULL,
+  name VARCHAR(255),
+  mobile VARCHAR(50),
+  password VARCHAR(255) NOT NULL,
+  referralcode VARCHAR(50) NOT NULL,
+  referredby VARCHAR(50),
   otp VARCHAR(10) NOT NULL,
   expiresat TIMESTAMP NOT NULL,
   createdat TIMESTAMP DEFAULT NOW()
@@ -233,6 +292,19 @@ CREATE TABLE IF NOT EXISTS "TelegramBindKey" (
   expiresat TIMESTAMP NOT NULL,
   used BOOLEAN DEFAULT false,
   createdat TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS "ExchangeRequest" (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  userid VARCHAR(255) NOT NULL,
+  ratetype VARCHAR(50) NOT NULL,
+  rate NUMERIC NOT NULL,
+  amount NUMERIC NOT NULL,
+  upiid VARCHAR(255),
+  status VARCHAR(50) DEFAULT 'PENDING',
+  adminnote VARCHAR(500),
+  createdat TIMESTAMP DEFAULT NOW(),
+  updatedat TIMESTAMP DEFAULT NOW()
 );
 `;
 
