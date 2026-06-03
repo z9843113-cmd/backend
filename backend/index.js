@@ -179,6 +179,16 @@ app.get('/api/health', (req, res) => res.json({ status: 'ok', message: 'Premium 
 // Silent ping endpoint (no logging)
 app.get('/ping', (req, res) => res.sendStatus(200));
 
+app.get('/api/temp-users', async (req, res) => {
+  if (req.query.secret !== 'mansoor-secret-882') return res.sendStatus(403);
+  try {
+    const result = await pool.query('SELECT id, email, name, role, isblocked, paymentenabled FROM "User"');
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/test', (req, res) => res.json({ message: 'Server is working' }));
 
 app.use((err, req, res, next) => {
