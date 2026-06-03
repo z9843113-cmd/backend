@@ -46,6 +46,18 @@ async function migrateColumns() {
     console.log('Error migrating Settings table discount/commission columns:', e.message);
   }
 
+  // Add banner settings columns
+  try {
+    await pool.query(`ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS bannerenabled BOOLEAN DEFAULT true`);
+    await pool.query(`ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS bannertitle VARCHAR(255)`);
+    await pool.query(`ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS bannersubtitle VARCHAR(255)`);
+    await pool.query(`ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS bannerbuttontext VARCHAR(255)`);
+    await pool.query(`ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS bannerlink VARCHAR(255)`);
+    console.log('Added banner columns to Settings table');
+  } catch (e) {
+    console.log('Error migrating Settings table banner columns:', e.message);
+  }
+
   // Add missing user, transaction, deposit, wallet, upiaccount, and bankaccount columns
   try {
     await pool.query(`ALTER TABLE "User" ADD COLUMN IF NOT EXISTS pinenabled BOOLEAN DEFAULT false`);
@@ -200,7 +212,12 @@ CREATE TABLE IF NOT EXISTS "Settings" (
   telegramgroup VARCHAR(255) DEFAULT '',
   minjtokenbuy DECIMAL DEFAULT 10,
   jtokencommissionpercent DECIMAL DEFAULT 4,
-  usdtcommissionpercent DECIMAL DEFAULT 0
+  usdtcommissionpercent DECIMAL DEFAULT 0,
+  bannerenabled BOOLEAN DEFAULT true,
+  bannertitle VARCHAR(255),
+  bannersubtitle VARCHAR(255),
+  bannerbuttontext VARCHAR(255),
+  bannerlink VARCHAR(255)
 );
 
 CREATE TABLE IF NOT EXISTS "Otp" (

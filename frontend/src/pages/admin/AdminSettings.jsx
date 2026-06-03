@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { adminAPI } from '../../services/api';
+import { adminAPI, userAPI } from '../../services/api';
 import { useAuthStore } from '../../store';
 import AdminNotificationBell from '../../components/AdminNotificationBell';
 
@@ -13,9 +13,12 @@ const AdminSettings = () => {
   const [supportLinks, setSupportLinks] = useState({ whatsappSupport: '', telegramSupport: '', telegramGroup: '' });
   const [savingSupport, setSavingSupport] = useState(false);
   const [savingBanner, setSavingBanner] = useState(false);
+  const [passwordData, setPasswordData] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+  const [savingPassword, setSavingPassword] = useState(false);
   const [message, setMessage] = useState('');
   const [supportMessage, setSupportMessage] = useState('');
   const [bannerMessage, setBannerMessage] = useState('');
+  const [passwordMessage, setPasswordMessage] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { logout } = useAuthStore();
   const navigate = useNavigate();
@@ -49,6 +52,32 @@ const AdminSettings = () => {
     try { await adminAPI.updateSettings(bannerData); setBannerMessage('Banner settings updated successfully!'); }
     catch { setBannerMessage('Failed to update banner settings'); }
     finally { setSavingBanner(false); }
+  };
+
+  const handlePasswordSubmit = async (e) => {
+    e.preventDefault();
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      setPasswordMessage('New passwords do not match');
+      return;
+    }
+    if (passwordData.newPassword.length < 6) {
+      setPasswordMessage('Password must be at least 6 characters');
+      return;
+    }
+    setSavingPassword(true);
+    setPasswordMessage('');
+    try {
+      await userAPI.updatePassword({
+        currentPassword: passwordData.currentPassword,
+        newPassword: passwordData.newPassword
+      });
+      setPasswordMessage('Password updated successfully!');
+      setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    } catch (err) {
+      setPasswordMessage(err.message || 'Failed to update password');
+    } finally {
+      setSavingPassword(false);
+    }
   };
 
   const menuItems = [
@@ -230,6 +259,54 @@ const AdminSettings = () => {
               </div>
             </div>
             <button type="submit" disabled={savingBanner} className="w-full py-4 bg-gradient-to-r from-[#D4AF37] to-[#FFD700] text-black font-bold rounded-2xl disabled:opacity-50">{savingBanner ? 'Saving...' : 'Save Banner'}</button>
+          </form>
+        </div>
+
+        <div className="bg-gradient-to-br from-[#1a1a1a] to-[#0d0d0d] rounded-3xl p-6 border border-[#2a2a2a]">
+          <h3 className="text-lg font-semibold text-white mb-6">Change Admin Password</h3>
+          <p className="text-gray-400 text-sm mb-4">Change the password of your administrator account.</p>
+          
+          {passwordMessage && (
+            <div className={`mb-4 px-4 py-2 rounded-xl ${passwordMessage.includes('successfully') ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'}`}>
+              {passwordMessage}
+            </div>
+          )}
+          
+          <form onSubmit={handlePasswordSubmit} className="space-y-4">
+            <div>
+              <label className="block text-gray-400 text-sm mb-2">Current Password</label>
+              <input 
+                type="password" 
+                required
+                value={passwordData.currentPassword} 
+                onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })} 
+                placeholder="••••••••"
+                className="w-full px-5 py-4 bg-[#0a0a0a] border border-[#2a2a2a] rounded-2xl text-white focus:border-[#D4AF37] focus:outline-none" 
+              />
+            </div>
+            <div>
+              <label className="block text-gray-400 text-sm mb-2">New Password</label>
+              <input 
+                type="password" 
+                required
+                value={passwordData.newPassword} 
+                onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })} 
+                placeholder="••••••••"
+                className="w-full px-5 py-4 bg-[#0a0a0a] border border-[#2a2a2a] rounded-2xl text-white focus:border-[#D4AF37] focus:outline-none" 
+              />
+            </div>
+            <div>
+              <label className="block text-gray-400 text-sm mb-2">Confirm New Password</label>
+              <input 
+                type="password" 
+                required
+                value={passwordData.confirmPassword} 
+                onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })} 
+                placeholder="••••••••"
+                className="w-full px-5 py-4 bg-[#0a0a0a] border border-[#2a2a2a] rounded-2xl text-white focus:border-[#D4AF37] focus:outline-none" 
+              />
+            </div>
+            <button type="submit" disabled={savingPassword} className="w-full py-4 bg-gradient-to-r from-[#D4AF37] to-[#FFD700] text-black font-bold rounded-2xl disabled:opacity-50">{savingPassword ? 'Saving...' : 'Change Password'}</button>
           </form>
         </div>
       </div>
