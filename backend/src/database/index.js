@@ -379,10 +379,7 @@ async function initializeDatabase() {
       for (const app of upiApps) {
         await pool.query(`INSERT INTO "UPIApp" (id, name, isactive, isforjtoken) VALUES ($1, $2, true, $3) ON CONFLICT (id) DO UPDATE SET isactive = true, isforjtoken = EXCLUDED.isforjtoken, name = EXCLUDED.name`, [app.id, app.name, app.isforjtoken]);
       }
-      
-      await pool.query(`INSERT INTO "CryptoAddress" (id, coin, network, address, isactive) VALUES ('usdt-trc20', 'USDT', 'TRC20', 'TXyqBHxXH6WqE4M5L3VN7CJD9GKfCp2Yv', true) ON CONFLICT (id) DO NOTHING`);
-      await pool.query(`INSERT INTO "CryptoAddress" (id, coin, network, address, isactive) VALUES ('usdt-erc20', 'USDT', 'ERC20', '0x8Ba1f109551bD432803012645Hac136E76aCd94', true) ON CONFLICT (id) DO NOTHING`);
-      
+
       const hashedPassword = await bcrypt.hash('admin123', 10);
       await pool.query(`
         INSERT INTO "User" (email, password, name, role, referralcode, isverified, createdat)
