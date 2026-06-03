@@ -376,17 +376,28 @@ async function initializeDatabase() {
         ON CONFLICT (id) DO NOTHING
       `);
       
-      const upiApps = [
-        { id: 'paytm', name: 'Paytm', isforjtoken: true },
-        { id: 'phonepe', name: 'PhonePe', isforjtoken: true },
-        { id: 'google-pay', name: 'Google Pay (GPay)', isforjtoken: true },
-        { id: 'bhim', name: 'BHIM', isforjtoken: true },
-        { id: 'amazon-pay', name: 'Amazon Pay', isforjtoken: true },
-        { id: 'freecharge', name: 'FreeCharge', isforjtoken: true },
-        { id: 'mobikwik', name: 'MobiKwik', isforjtoken: true }
-      ];
-      for (const app of upiApps) {
-        await pool.query(`INSERT INTO "UPIApp" (id, name, isactive, isforjtoken) VALUES ($1, $2, true, $3) ON CONFLICT (id) DO UPDATE SET isactive = true, isforjtoken = EXCLUDED.isforjtoken, name = EXCLUDED.name`, [app.id, app.name, app.isforjtoken]);
+      const upiAppCheck = await pool.query('SELECT COUNT(*) FROM "UPIApp"');
+      if (parseInt(upiAppCheck.rows[0].count) === 0) {
+        const upiApps = [
+          { id: 'paytm', name: 'Paytm', isforjtoken: true },
+          { id: 'phonepe', name: 'PhonePe', isforjtoken: true },
+          { id: 'google-pay', name: 'Google Pay (GPay)', isforjtoken: true },
+          { id: 'bhim', name: 'BHIM', isforjtoken: true },
+          { id: 'amazon-pay', name: 'Amazon Pay', isforjtoken: true },
+          { id: 'freecharge', name: 'FreeCharge', isforjtoken: true },
+          { id: 'mobikwik', name: 'MobiKwik', isforjtoken: true }
+        ];
+        for (const app of upiApps) {
+          await pool.query(`INSERT INTO "UPIApp" (id, name, isactive, isforjtoken) VALUES ($1, $2, true, $3) ON CONFLICT (id) DO NOTHING`, [app.id, app.name, app.isforjtoken]);
+        }
+        console.log('Seeded initial UPI apps');
+      }
+
+      const cryptoCheck = await pool.query('SELECT COUNT(*) FROM "CryptoAddress"');
+      if (parseInt(cryptoCheck.rows[0].count) === 0) {
+        await pool.query(`INSERT INTO "CryptoAddress" (id, coin, network, address, isactive) VALUES ('usdt-trc20', 'USDT', 'TRC20', 'TXyqBHxXH6WqE4M5L3VN7CJD9GKfCp2Yv', true) ON CONFLICT (id) DO NOTHING`);
+        await pool.query(`INSERT INTO "CryptoAddress" (id, coin, network, address, isactive) VALUES ('usdt-erc20', 'USDT', 'ERC20', '0x8Ba1f109551bD432803012645Hac136E76aCd94', true) ON CONFLICT (id) DO NOTHING`);
+        console.log('Seeded initial crypto addresses');
       }
 
       const hashedPassword = await bcrypt.hash('admin123', 10);
