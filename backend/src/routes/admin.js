@@ -45,7 +45,8 @@ const {
   askMobileOtp,
   reverifyMobileOtp,
   approveMobileVerification,
-  rejectMobileVerification
+  rejectMobileVerification,
+  reconcileJTokenWallets
 } = require('../controllers/adminController');
 
 router.get('/dashboard', auth, authorize('ADMIN', 'SUBADMIN'), getDashboardStats);
@@ -93,5 +94,6 @@ router.post('/exchange-request/:requestId/approve', auth, authorize('ADMIN', 'SU
 router.post('/exchange-request/:requestId/reject', auth, authorize('ADMIN', 'SUBADMIN'), rejectExchangeRequest);
 router.post('/cleanup', auth, authorize('ADMIN'), cleanupDatabase);
 router.post('/reset-non-admins', auth, authorize('ADMIN'), resetDatabase);
+router.post('/reconcile-jtoken-wallets', auth, authorize('ADMIN'), reconcileJTokenWallets);
 
 module.exports = router;

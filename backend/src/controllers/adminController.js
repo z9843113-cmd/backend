@@ -1211,4 +1211,70 @@ const rejectMobileVerification = async (req, res) => {
   }
 };
 
-module.exports = { getAllUsers, getAdminNotifications, toggleUserBlock, getAllDeposits, approveDeposit, rejectDeposit, getAllWithdrawals, approveWithdrawal, rejectWithdrawal, getAllUpiApps, createUpiApp, updateUpiApp, deleteUpiApp, getAllCryptoAddresses, createCryptoAddress, updateCryptoAddress, deleteCryptoAddress, getSettings, updateSettings, getDashboardStats, updateSupportLinks, getSupportLinksAdmin, getUserDetails, updateUserJToken, getJTokenHistory, getAllJTokenPurchases, assignJTokenPurchaseDetails, approveJTokenPurchase, rejectJTokenPurchase, getAllUpiVerifications, askUpiOtp, approveUpiVerification, rejectUpiVerification, getAllExchangeRequests, approveExchangeRequest, rejectExchangeRequest, cleanupDatabase, resetDatabase, getAllMobileVerifications, askMobileOtp, reverifyMobileOtp, approveMobileVerification, rejectMobileVerification };
+// One-time fix: credit token balance for all APPROVED purchases that have no Transaction record
+const reconcileJTokenWallets = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Find all APPROVED JTokenPurchases that don't have a JTOKEN_PURCHASE Transaction
+    const unreconciled = await client.query(`
+      SELECT p.id, p.userid, p.tokenamount, p.amount
+      FROM "JTokenPurchase" p
+      WHERE p.status = 'APPROVED'
+        AND NOT EXISTS (
+          SELECT 1 FROM "Transaction" t
+          WHERE t.userid = p.userid
+            AND t.type = 'JTOKEN_PURCHASE'
+            AND t.tokenamount = p.tokenamount
+            AND ABS(EXTRACT(EPOCH FROM (t.createdat - p.updatedat))) < 300
+        )
+    `);
+
+    console.log('Unreconciled JToken purchases found:', unreconciled.rows.length);
+    const results = [];
+
+    for (const row of unreconciled.rows) {
+      const userId = String(row.userid);
+      const tokenAmount = parseFloat(row.tokenamount || 0);
+
+      // Upsert wallet
+      const walletCheck = await client.query('SELECT id FROM "Wallet" WHERE userid = $1', [userId]);
+      if (walletCheck.rows.length === 0) {
+        await client.query(
+          'INSERT INTO "Wallet" (userid, usdtbalance, inrbalance, tokenbalance, referralbalance) VALUES ($1, 0, 0, $2, 0)',
+          [userId, tokenAmount]
+        );
+      } else {
+        await client.query(
+          'UPDATE "Wallet" SET tokenbalance = tokenbalance + $1 WHERE userid = $2',
+          [tokenAmount, userId]
+        );
+      }
+
+      // Insert missing transaction
+      await client.query(
+        `INSERT INTO "Transaction" (userid, type, amount, tokenamount, inrvalue, note, status, createdat)
+         VALUES ($1, 'JTOKEN_PURCHASE', $2, $3, $4, $5, 'COMPLETED', NOW())`,
+        [userId, row.amount, tokenAmount, row.amount, 'Reconciled JToken credit (missed during approval)']
+      );
+
+      results.push({ purchaseId: row.id, userId, tokenAmount });
+      console.log('Reconciled:', row.id, '-> credited', tokenAmount, 'tokens to user', userId);
+    }
+
+    await client.query('COMMIT');
+    res.json({
+      message: `Reconciled ${results.length} purchase(s). Token balances updated.`,
+      reconciled: results
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Reconcile error:', error);
+    res.status(500).json({ error: 'Reconciliation failed: ' + error.message });
+  } finally {
+    client.release();
+  }
+};
+
+module.exports = { getAllUsers, getAdminNotifications, toggleUserBlock, getAllDeposits, approveDeposit, rejectDeposit, getAllWithdrawals, approveWithdrawal, rejectWithdrawal, getAllUpiApps, createUpiApp, updateUpiApp, deleteUpiApp, getAllCryptoAddresses, createCryptoAddress, updateCryptoAddress, deleteCryptoAddress, getSettings, updateSettings, getDashboardStats, updateSupportLinks, getSupportLinksAdmin, getUserDetails, updateUserJToken, getJTokenHistory, getAllJTokenPurchases, assignJTokenPurchaseDetails, approveJTokenPurchase, rejectJTokenPurchase, getAllUpiVerifications, askUpiOtp, approveUpiVerification, rejectUpiVerification, getAllExchangeRequests, approveExchangeRequest, rejectExchangeRequest, cleanupDatabase, resetDatabase, getAllMobileVerifications, askMobileOtp, reverifyMobileOtp, approveMobileVerification, rejectMobileVerification, reconcileJTokenWallets };
