@@ -167,10 +167,12 @@ const AdminUpiVerifications = () => {
                             <button onClick={() => handleApprove(v.id)} disabled={processingId === v.id} className="rounded-xl bg-emerald-600 px-3 py-2 text-xs sm:text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
                               {processingId === v.id ? '...' : 'Approve'}
                             </button>
-                            <button onClick={() => handleReject(v.id)} disabled={processingId === v.id} className="rounded-xl bg-red-600 px-3 py-2 text-xs sm:text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50">
-                              Reject
-                            </button>
                           </>
+                        )}
+                        {['PENDING', 'OTP_REQUESTED', 'OTP_SUBMITTED'].includes(v.status) && (
+                          <button onClick={() => handleReject(v.id)} disabled={processingId === v.id} className="rounded-xl bg-red-600 px-3 py-2 text-xs sm:text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50">
+                            Reject
+                          </button>
                         )}
                       </div>
                     </div>

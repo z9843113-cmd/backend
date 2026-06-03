@@ -308,6 +308,11 @@ const ManageAccount = () => {
                           </button>
                         </div>
                       )}
+                      {['PENDING', 'OTP_REQUESTED', 'OTP_SUBMITTED'].includes(v.status) && (
+                        <button onClick={handleCancelUpiVerification} disabled={submitting} className="w-full py-3 mt-3 bg-red-500/10 text-red-400 hover:bg-red-500/20 font-bold rounded-2xl transition-colors">
+                          Cancel Verification Request
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
