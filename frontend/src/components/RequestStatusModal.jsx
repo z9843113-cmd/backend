@@ -68,6 +68,10 @@ const RequestStatusModal = ({ isOpen, onClose, type, requestId, title }) => {
   const getStatusMessage = () => {
     if (status === 'APPROVED' || status === 'COMPLETED') return '✅ Request Approved!';
     if (status === 'REJECTED' || status === 'CANCELLED') return '❌ Request Rejected';
+    if (status === 'WAITING_ADMIN') return '⏳ Wait for Orders';
+    if (status === 'READY_TO_PAY') return '💳 Ready to Pay';
+    if (status === 'PAYMENT_STARTED') return '🔄 Payment Started';
+    if (status === 'PAYMENT_SUBMITTED') return '📤 Payment Submitted';
     return '⏳ Waiting for approval...';
   };
 
@@ -98,10 +102,10 @@ const RequestStatusModal = ({ isOpen, onClose, type, requestId, title }) => {
           {getStatusMessage()}
         </p>
 
-        {status === 'PENDING' && (
+        {(status === 'PENDING' || status === 'WAITING_ADMIN') && (
           <>
             <p className="mb-4 text-sm text-gray-400">
-              Admin will approve your request soon...
+              {status === 'WAITING_ADMIN' ? 'Admin will assign payment details soon...' : 'Admin will approve your request soon...'}
             </p>
             <div className="flex items-center justify-center gap-2">
               <div className="h-2 w-32 overflow-hidden rounded-full bg-gray-700">

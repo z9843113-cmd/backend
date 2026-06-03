@@ -40,6 +40,20 @@ const BuyJToken = () => {
   };
 
   const JTOKEN_APPS = ['mobiwik', 'mobwik', 'freerecharge'];
+
+  const formatStatus = (status) => {
+    const labels = {
+      'WAITING_ADMIN': 'Wait for Orders',
+      'READY_TO_PAY': 'Ready to Pay',
+      'PAYMENT_STARTED': 'Payment Started',
+      'PAYMENT_SUBMITTED': 'Payment Submitted',
+      'APPROVED': 'Approved',
+      'REJECTED': 'Rejected',
+      'CANCELLED': 'Cancelled',
+      'EXPIRED': 'Expired',
+    };
+    return labels[status] || status;
+  };
   
   const fetchRequestData = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -234,7 +248,7 @@ const BuyJToken = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-white font-bold">Active Request</p>
-                <p className="text-gray-400 text-sm">₹{parseFloat(request.amount || 0).toFixed(2)} • {request.status}</p>
+                <p className="text-gray-400 text-sm">₹{parseFloat(request.amount || 0).toFixed(2)} • {formatStatus(request.status)}</p>
               </div>
               <div className="text-right">
                 <span className={`px-3 py-1 rounded-full text-xs font-bold ${
@@ -243,7 +257,7 @@ const BuyJToken = () => {
                   request.status === 'PAYMENT_STARTED' ? 'bg-blue-500/20 text-blue-400' :
                   'bg-gray-500/20 text-gray-400'
                 }`}>
-                  {request.status}
+                  {formatStatus(request.status)}
                 </span>
                 <p className="text-[#D4AF37] text-xs mt-1">Tap to view →</p>
               </div>
@@ -539,9 +553,10 @@ const BuyJToken = () => {
                 <span className={`inline-block px-3 py-1 rounded-full text-sm font-bold ${
                   request.status === 'APPROVED' ? 'bg-green-500/20 text-green-400' :
                   request.status === 'PAYMENT_SUBMITTED' ? 'bg-yellow-500/20 text-yellow-400' :
+                  request.status === 'WAITING_ADMIN' ? 'bg-orange-500/20 text-orange-400' :
                   'bg-blue-500/20 text-blue-400'
                 }`}>
-                  {request.status}
+                  {formatStatus(request.status)}
                 </span>
               </div>
               {request.paymentupi && (
