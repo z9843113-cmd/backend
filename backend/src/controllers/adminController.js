@@ -6,31 +6,53 @@ const getAllUsers = async (req, res) => {
     const limit = parseInt(req.query.limit) || 20;
     const offset = (page - 1) * limit;
     const search = req.query.search || '';
+    const paymentEnabled = req.query.paymentEnabled || req.query.paymentenabled;
     
-    let query = 'SELECT u.id, u.email, u.name, u.mobile, u.role, u.referralcode, u.referredby, u.isverified, u.isblocked, u.paymentenabled, u.createdat, w.usdtbalance, w.inrbalance, w.tokenbalance, w.referralbalance FROM "User" u LEFT JOIN "Wallet" w ON u.id::text = w.userid';
-    let countQuery = 'SELECT COUNT(*) FROM "User"';
     const params = [];
-    const isNumeric = search ? /^\d+$/.test(search) : false;
+    let whereClauses = [];
     
     if (search) {
+      const isNumeric = /^\d+$/.test(search);
       if (isNumeric) {
-        query += ' WHERE u.id::text = $1';
-        countQuery += ' WHERE id::text = $1';
-        params.push(search);
+        whereClauses.push(`u.id::text = $${params.push(search)}`);
       } else {
-        query += ' WHERE u.email ILIKE $1 OR u.referralcode ILIKE $1 OR u.mobile ILIKE $1';
-        countQuery += ' WHERE email ILIKE $1 OR referralcode ILIKE $1 OR mobile ILIKE $1';
-        params.push('%' + search + '%');
+        const searchPattern = '%' + search + '%';
+        const pIdx = params.push(searchPattern);
+        whereClauses.push(`(u.email ILIKE $${pIdx} OR u.referralcode ILIKE $${pIdx} OR u.mobile ILIKE $${pIdx})`);
       }
-      query += ` ORDER BY u.createdat DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
-      params.push(limit, offset);
-    } else {
-      query += ' ORDER BY u.createdat DESC LIMIT $1 OFFSET $2';
-      params.push(limit, offset);
     }
     
+    if (paymentEnabled === 'true') {
+      whereClauses.push(`u.paymentenabled = true`);
+    } else if (paymentEnabled === 'false') {
+      whereClauses.push(`(u.paymentenabled = false OR u.paymentenabled IS NULL)`);
+    }
+    
+    let whereSql = '';
+    if (whereClauses.length > 0) {
+      whereSql = ' WHERE ' + whereClauses.join(' AND ');
+    }
+    
+    let query = `
+      SELECT u.id, u.email, u.name, u.mobile, u.role, u.referralcode, u.referredby, u.isverified, u.isblocked, u.paymentenabled, u.createdat, 
+             w.usdtbalance, w.inrbalance, w.tokenbalance, w.referralbalance 
+      FROM "User" u 
+      LEFT JOIN "Wallet" w ON u.id::text = w.userid
+      ${whereSql}
+      ORDER BY u.createdat DESC 
+      LIMIT $${params.push(limit)} OFFSET $${params.push(offset)}
+    `;
+    
+    let countQuery = `
+      SELECT COUNT(*) 
+      FROM "User" u
+      ${whereSql}
+    `;
+    
+    const countParams = params.slice(0, params.length - 2);
+    
     const users = await pool.query(query, params);
-    const total = await pool.query(countQuery, search ? (isNumeric ? [search] : ['%' + search + '%']) : []);
+    const total = await pool.query(countQuery, countParams);
     res.json({ users: users.rows, total: parseInt(total.rows[0].count), page, totalPages: Math.ceil(total.rows[0].count / limit) });
   } catch (error) {
     console.error('getAllUsers error:', error);
@@ -281,6 +303,8 @@ const approveWithdrawal = async (req, res) => {
     console.log('Approve withdrawal - found:', w.rows.length, 'status:', w.rows[0]?.status);
     if (w.rows.length > 0 && w.rows[0].status === 'PENDING') {
       await client.query('UPDATE "Withdrawal" SET status = $1 WHERE id = $2 AND status = $3', ['APPROVED', req.params.withdrawalId, 'PENDING']);
+      await client.query('UPDATE "User" SET paymentenabled = false WHERE id = $1', [w.rows[0].userid]);
+      console.log('User paymentenabled set to false after withdrawal approval');
     }
     await client.query('COMMIT');
     res.json({ message: 'Approved' });
@@ -302,6 +326,8 @@ const rejectWithdrawal = async (req, res) => {
     if (w.rows.length > 0 && w.rows[0].status === 'PENDING') {
       await client.query('UPDATE "Withdrawal" SET status = $1 WHERE id = $2', ['REJECTED', req.params.withdrawalId]);
       await client.query('UPDATE "Wallet" SET inrbalance = inrbalance + $1 WHERE userid = $2', [parseFloat(w.rows[0].amount), w.rows[0].userid]);
+      await client.query('UPDATE "User" SET paymentenabled = false WHERE id = $1', [w.rows[0].userid]);
+      console.log('User paymentenabled set to false after withdrawal rejection');
     }
     await client.query('COMMIT');
     res.json({ message: 'Rejected' });

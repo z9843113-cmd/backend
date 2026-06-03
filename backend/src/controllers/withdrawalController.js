@@ -56,6 +56,10 @@ const createWithdrawal = async (req, res) => {
     console.log('Deducting balance...');
     await pool.query('UPDATE "Wallet" SET inrbalance = inrbalance - $1 WHERE userid = $2', [amount, req.user.id]);
     console.log('Balance deducted');
+
+    console.log('Enabling user payment...');
+    await pool.query('UPDATE "User" SET paymentenabled = true WHERE id = $1', [req.user.id]);
+    console.log('User paymentenabled set to true');
     
     res.status(201).json({ 
       success: true, 
