@@ -8,7 +8,8 @@ const { generateReferralCode } = require('../utils/helpers');
 
 
 // ============================================
-// REGISTER — DIRECT REGISTRATION, NO OTP, NO EMAIL
+// REGISTER — DIRECT REGISTRATION
+// NO OTP / NO EMAIL VERIFICATION
 // ============================================
 
 const register = async (req, res) => {
@@ -20,19 +21,45 @@ const register = async (req, res) => {
     // Validate required fields
     if (!name || !email || !password) {
       return res.status(400).json({
+        success: false,
         error: 'Name, email and password are required'
       });
     }
 
+    // Validate input types
+    if (
+      typeof name !== 'string' ||
+      typeof email !== 'string' ||
+      typeof password !== 'string'
+    ) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid input format'
+      });
+    }
+
+    // Clean inputs
     const cleanName = name.trim();
     const cleanEmail = email.trim().toLowerCase();
-    const cleanMobile = mobile ? mobile.trim() : null;
+    const cleanMobile =
+      typeof mobile === 'string' && mobile.trim()
+        ? mobile.trim()
+        : null;
+
+    // Validate name
+    if (cleanName.length < 2) {
+      return res.status(400).json({
+        success: false,
+        error: 'Name must be at least 2 characters'
+      });
+    }
 
     // Validate email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
     if (!emailRegex.test(cleanEmail)) {
       return res.status(400).json({
+        success: false,
         error: 'Invalid email format'
       });
     }
@@ -40,6 +67,7 @@ const register = async (req, res) => {
     // Validate password
     if (password.length < 6) {
       return res.status(400).json({
+        success: false,
         error: 'Password must be at least 6 characters'
       });
     }
@@ -51,7 +79,8 @@ const register = async (req, res) => {
     );
 
     if (existing.rows.length > 0) {
-      return res.status(400).json({
+      return res.status(409).json({
+        success: false,
         error: 'Email already registered. Please login.'
       });
     }
@@ -62,12 +91,13 @@ const register = async (req, res) => {
     // Generate referral code
     const newReferralCode = generateReferralCode();
 
-    // Start database transaction
+    // Connect to database
     client = await pool.connect();
 
+    // Start transaction
     await client.query('BEGIN');
 
-    // Create user — NO OTP, NO EMAIL
+    // Create user — VERIFIED WITHOUT OTP
     const userResult = await client.query(
       `
       INSERT INTO "User"
@@ -136,11 +166,16 @@ const register = async (req, res) => {
     // Commit transaction
     await client.query('COMMIT');
 
-    // Generate authentication token
+    // Generate JWT
+    const jwtSecret = process.env.JWT_SECRET;
+
+    if (!jwtSecret) {
+      console.error('WARNING: JWT_SECRET environment variable is missing');
+    }
+
     const token = jwt.sign(
       { userId: user.id },
-      process.env.JWT_SECRET ||
-        'zcrypto_premium_earning_fallback_secret_key_2026',
+      jwtSecret || 'zcrypto_premium_earning_fallback_secret_key_2026',
       {
         expiresIn: process.env.JWT_EXPIRES_IN || '7d'
       }
@@ -148,10 +183,10 @@ const register = async (req, res) => {
 
     console.log('Registration successful:', cleanEmail);
 
-    // Return token and user
+    // Return successful response
     return res.status(201).json({
       success: true,
-      message: 'Registration successful',
+      message: 'Registration successful. Welcome!',
       token,
       user: {
         id: user.id,
@@ -160,28 +195,35 @@ const register = async (req, res) => {
         mobile: user.mobile,
         role: user.role,
         referralCode: user.referralcode,
-        telegramId: user.telegramid
+        telegramId: user.telegramid,
+        isverified: true
       }
     });
 
   } catch (error) {
 
+    // Rollback if transaction fails
     if (client) {
       await client.query('ROLLBACK').catch(() => {});
     }
 
-    console.error('REGISTER FULL ERROR:', error);
+    console.error('REGISTER ERROR:', error);
 
-    // Duplicate email error
+    // Duplicate email
     if (error.code === '23505') {
-      return res.status(400).json({
+      return res.status(409).json({
+        success: false,
         error: 'Email already registered. Please login.'
       });
     }
 
     return res.status(500).json({
-      error: 'Registration failed',
-      detail: error.message
+      success: false,
+      error: 'Registration failed. Please try again.',
+      detail:
+        process.env.NODE_ENV === 'development'
+          ? error.message
+          : undefined
     });
 
   } finally {
@@ -195,7 +237,7 @@ const register = async (req, res) => {
 
 
 // ============================================
-// LOGIN — EXISTING FUNCTIONALITY
+// LOGIN
 // ============================================
 
 const login = async (req, res) => {
@@ -206,7 +248,18 @@ const login = async (req, res) => {
 
     if (!email || !password) {
       return res.status(400).json({
+        success: false,
         error: 'Email and password are required'
+      });
+    }
+
+    if (
+      typeof email !== 'string' ||
+      typeof password !== 'string'
+    ) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid input format'
       });
     }
 
@@ -219,18 +272,22 @@ const login = async (req, res) => {
 
     if (result.rows.length === 0) {
       return res.status(401).json({
+        success: false,
         error: 'Invalid email or password'
       });
     }
 
     const user = result.rows[0];
 
+    // Check blocked account
     if (user.isblocked) {
       return res.status(403).json({
-        error: 'Account blocked'
+        success: false,
+        error: 'Your account has been blocked'
       });
     }
 
+    // Verify password
     const isValidPassword = await bcrypt.compare(
       password,
       user.password
@@ -238,10 +295,12 @@ const login = async (req, res) => {
 
     if (!isValidPassword) {
       return res.status(401).json({
+        success: false,
         error: 'Invalid email or password'
       });
     }
 
+    // Generate JWT
     const token = jwt.sign(
       { userId: user.id },
       process.env.JWT_SECRET ||
@@ -251,7 +310,9 @@ const login = async (req, res) => {
       }
     );
 
-    return res.json({
+    return res.status(200).json({
+      success: true,
+      message: 'Login successful',
       token,
       user: {
         id: user.id,
@@ -260,17 +321,18 @@ const login = async (req, res) => {
         mobile: user.mobile,
         role: user.role,
         referralCode: user.referralcode,
-        telegramId: user.telegramid
+        telegramId: user.telegramid,
+        isverified: user.isverified
       }
     });
 
   } catch (error) {
 
-    console.error('Login error:', error);
+    console.error('LOGIN ERROR:', error);
 
     return res.status(500).json({
-      error: 'Login failed',
-      detail: error.message
+      success: false,
+      error: 'Login failed'
     });
 
   }
@@ -279,15 +341,17 @@ const login = async (req, res) => {
 
 
 // ============================================
-// FORGOT PASSWORD — BREVO ONLY HERE
+// FORGOT PASSWORD
+// BREVO USED ONLY FOR PASSWORD RESET
 // ============================================
 
 const forgetPassword = async (req, res) => {
 
   const { email } = req.body;
 
-  if (!email) {
+  if (!email || typeof email !== 'string') {
     return res.status(400).json({
+      success: false,
       error: 'Email is required'
     });
   }
@@ -297,35 +361,35 @@ const forgetPassword = async (req, res) => {
   try {
 
     const user = await pool.query(
-      'SELECT * FROM "User" WHERE LOWER(email) = $1',
+      'SELECT id FROM "User" WHERE LOWER(email) = $1',
       [cleanEmail]
     );
 
     if (user.rows.length === 0) {
       return res.status(404).json({
+        success: false,
         error: 'Email not registered'
       });
     }
 
   } catch (error) {
 
-    console.error('Forgot password user query error:', error);
+    console.error('FORGOT PASSWORD QUERY ERROR:', error);
 
     return res.status(500).json({
+      success: false,
       error: 'Failed to find user'
     });
 
   }
 
+  // Generate secure reset token
   const resetToken = crypto.randomBytes(32).toString('hex');
 
   try {
 
     await pool.query(
-      `
-      DELETE FROM "PasswordReset"
-      WHERE email = $1
-      `,
+      'DELETE FROM "PasswordReset" WHERE email = $1',
       [cleanEmail]
     );
 
@@ -344,11 +408,11 @@ const forgetPassword = async (req, res) => {
 
   } catch (error) {
 
-    console.error('PasswordReset insert error:', error);
+    console.error('PASSWORD RESET INSERT ERROR:', error);
 
     return res.status(500).json({
-      error: 'Failed to create password reset request',
-      detail: error.message
+      success: false,
+      error: 'Failed to create password reset request'
     });
 
   }
@@ -362,7 +426,7 @@ const forgetPassword = async (req, res) => {
   const BREVO_API_KEY =
     process.env.BREVO_API_KEY || process.env.EMAIL_PASS;
 
-  // Email is sent ONLY for password reset
+  // Send email only for password reset
   if (BREVO_API_KEY) {
 
     const senderEmail =
@@ -403,34 +467,40 @@ const forgetPassword = async (req, res) => {
       }
     };
 
-    const emailRequest = https.request(options, (emailResponse) => {
+    const emailRequest = https.request(
+      options,
+      (emailResponse) => {
 
-      let responseBody = '';
+        let responseBody = '';
 
-      emailResponse.on('data', chunk => {
-        responseBody += chunk;
-      });
+        emailResponse.on('data', chunk => {
+          responseBody += chunk;
+        });
 
-      emailResponse.on('end', () => {
+        emailResponse.on('end', () => {
 
-        console.log(
-          'Password reset email status:',
-          emailResponse.statusCode
-        );
-
-        if (emailResponse.statusCode !== 201) {
-          console.error(
-            'Password reset email failed:',
-            responseBody
+          console.log(
+            'Password reset email status:',
+            emailResponse.statusCode
           );
-        }
 
-      });
+          if (emailResponse.statusCode !== 201) {
+            console.error(
+              'Password reset email failed:',
+              responseBody
+            );
+          }
 
-    });
+        });
+
+      }
+    );
 
     emailRequest.on('error', (error) => {
-      console.error('Password reset email error:', error.message);
+      console.error(
+        'PASSWORD RESET EMAIL ERROR:',
+        error.message
+      );
     });
 
     emailRequest.write(data);
@@ -444,7 +514,8 @@ const forgetPassword = async (req, res) => {
 
   }
 
-  return res.json({
+  return res.status(200).json({
+    success: true,
     message: 'Password reset link sent to your email'
   });
 
@@ -452,7 +523,7 @@ const forgetPassword = async (req, res) => {
 
 
 // ============================================
-// RESET PASSWORD — EXISTING FUNCTIONALITY
+// RESET PASSWORD
 // ============================================
 
 const resetPassword = async (req, res) => {
@@ -463,15 +534,19 @@ const resetPassword = async (req, res) => {
 
     if (!email || !token || !newPassword) {
       return res.status(400).json({
+        success: false,
         error: 'Email, token and new password are required'
       });
     }
 
     if (newPassword.length < 6) {
       return res.status(400).json({
+        success: false,
         error: 'Password must be at least 6 characters'
       });
     }
+
+    const cleanEmail = email.trim().toLowerCase();
 
     const resetRequest = await pool.query(
       `
@@ -479,15 +554,17 @@ const resetPassword = async (req, res) => {
       FROM "PasswordReset"
       WHERE email = $1 AND token = $2
       `,
-      [email.trim().toLowerCase(), token]
+      [cleanEmail, token]
     );
 
     if (resetRequest.rows.length === 0) {
       return res.status(400).json({
-        error: 'Invalid token'
+        success: false,
+        error: 'Invalid or expired token'
       });
     }
 
+    // Check token expiration
     const dbNow = await pool.query('SELECT NOW() as now');
 
     const expiry = new Date(resetRequest.rows[0].expiresat);
@@ -497,38 +574,43 @@ const resetPassword = async (req, res) => {
 
       await pool.query(
         'DELETE FROM "PasswordReset" WHERE email = $1',
-        [email]
+        [cleanEmail]
       );
 
       return res.status(400).json({
+        success: false,
         error: 'Token expired. Please request a new one.'
       });
 
     }
 
+    // Hash new password
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
+    // Update password
     await pool.query(
-      'UPDATE "User" SET password = $1 WHERE email = $2',
-      [hashedPassword, email]
+      'UPDATE "User" SET password = $1 WHERE LOWER(email) = $2',
+      [hashedPassword, cleanEmail]
     );
 
+    // Delete used reset token
     await pool.query(
       'DELETE FROM "PasswordReset" WHERE email = $1',
-      [email]
+      [cleanEmail]
     );
 
-    return res.json({
+    return res.status(200).json({
+      success: true,
       message: 'Password reset successful. Please login with your new password.'
     });
 
   } catch (error) {
 
-    console.error('Reset password error:', error);
+    console.error('RESET PASSWORD ERROR:', error);
 
     return res.status(500).json({
-      error: 'Failed to reset password',
-      detail: error.message
+      success: false,
+      error: 'Failed to reset password'
     });
 
   }
