@@ -1,60 +1,127 @@
 const express = require('express');
 const router = express.Router();
-const { register, verifyOtp, login, resendOtp, forgetPassword, resetPassword } = require('../controllers/authController');
+
+const {
+  register,
+  login,
+  forgetPassword,
+  resetPassword
+} = require('../controllers/authController');
+
 const { pool } = require('../database/index');
 
+// Direct Registration (No OTP)
 router.post('/register', register);
-router.post('/verify-otp', verifyOtp);
+
+// Login
 router.post('/login', login);
-router.post('/resend-otp', resendOtp);
+
+// Forgot Password
 router.post('/forget-password', forgetPassword);
+
+// Reset Password
 router.post('/reset-password', resetPassword);
+
 
 // Test endpoint - create test user and return token
 router.post('/test-login', async (req, res) => {
+
   if (process.env.NODE_ENV === 'production') {
-    return res.status(403).json({ error: 'Test login is disabled in production for security reasons.' });
+    return res.status(403).json({
+      error: 'Test login is disabled in production for security reasons.'
+    });
   }
+
   try {
+
     const testEmail = 'testuser' + Date.now() + '@test.com';
+
     const bcrypt = require('bcryptjs');
+
     const hashedPassword = await bcrypt.hash('Test@123', 10);
-    const referralCode = 'TEST' + Math.random().toString(36).substring(7).toUpperCase();
-    
+
+    const referralCode =
+      'TEST' + Math.random().toString(36).substring(7).toUpperCase();
+
     const result = await pool.query(
-      `INSERT INTO "User" (email, password, name, role, referralcode, isverified, createdat) 
-       VALUES ($1, $2, $3, $4, $5, true, NOW()) RETURNING id, email, name`,
-      [testEmail, hashedPassword, 'Test User', 'USER', referralCode]
+      `INSERT INTO "User"
+       (email, password, name, role, referralcode, isverified, createdat)
+       VALUES ($1, $2, $3, $4, $5, true, NOW())
+       RETURNING id, email, name`,
+      [
+        testEmail,
+        hashedPassword,
+        'Test User',
+        'USER',
+        referralCode
+      ]
     );
-    
+
     const user = result.rows[0];
+
     const jwt = require('jsonwebtoken');
-    const token = jwt.sign({ userId: user.id, email: user.email, role: user.role }, process.env.JWT_SECRET || 'secret123', { expiresIn: '7d' });
-    
-    // Create wallet (ignore if already exists)
+
+    const token = jwt.sign(
+      {
+        userId: user.id,
+        email: user.email,
+        role: user.role
+      },
+      process.env.JWT_SECRET || 'secret123',
+      {
+        expiresIn: '7d'
+      }
+    );
+
+    // Create wallet
     try {
+
       await pool.query(
-        `INSERT INTO "Wallet" (userid, usdtbalance, inrbalance, tokenbalance, referralbalance) VALUES ($1, 100, 500, 100, 50)`,
+        `INSERT INTO "Wallet"
+         (userid, usdtbalance, inrbalance, tokenbalance, referralbalance)
+         VALUES ($1, 100, 500, 100, 50)`,
         [user.id]
       );
+
     } catch (walletErr) {
+
       console.log('Wallet may already exist:', walletErr.message);
+
     }
-    
+
     // Create reward record
     try {
+
       await pool.query(
-        `INSERT INTO "Reward" (userid, upirewardgiven, bankrewardgiven, telegramrewardgiven) VALUES ($1, false, false, false)`,
+        `INSERT INTO "Reward"
+         (userid, upirewardgiven, bankrewardgiven, telegramrewardgiven)
+         VALUES ($1, false, false, false)`,
         [user.id]
       );
+
     } catch (rewardErr) {
+
       console.log('Reward may already exist:', rewardErr.message);
+
     }
-    
-    res.json({ token, user: { id: user.id, email: user.email, name: user.name } });
+
+    res.json({
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name
+      }
+    });
+
   } catch (error) {
+
     console.error('Test login error:', error.message);
-    res.status(500).json({ error: 'Test login failed: ' + error.message });
+
+    res.status(500).json({
+      error: 'Test login failed: ' + error.message
+    });
+
   }
 });
 
