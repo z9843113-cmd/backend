@@ -1,110 +1,183 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
+const https = require('https');
+
 const { pool } = require('../database/index');
 const { generateReferralCode } = require('../utils/helpers');
+
+
+// ============================================
+// REGISTER — DIRECT REGISTRATION, NO OTP, NO EMAIL
+// ============================================
 
 const register = async (req, res) => {
   let client;
 
   try {
-    const { email, name, mobile, password, referralcode } = req.body;
+    const { name, email, mobile, password, referralcode } = req.body;
 
+    // Validate required fields
     if (!name || !email || !password) {
       return res.status(400).json({
         error: 'Name, email and password are required'
       });
     }
 
+    const cleanName = name.trim();
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanMobile = mobile ? mobile.trim() : null;
+
+    // Validate email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-    if (!emailRegex.test(email)) {
+    if (!emailRegex.test(cleanEmail)) {
       return res.status(400).json({
         error: 'Invalid email format'
       });
     }
 
+    // Validate password
     if (password.length < 6) {
       return res.status(400).json({
         error: 'Password must be at least 6 characters'
       });
     }
 
+    // Check existing email
     const existing = await pool.query(
-      'SELECT id FROM "User" WHERE email = $1',
-      [email]
+      'SELECT id FROM "User" WHERE LOWER(email) = $1',
+      [cleanEmail]
     );
 
     if (existing.rows.length > 0) {
       return res.status(400).json({
-        error: 'Email already registered'
+        error: 'Email already registered. Please login.'
       });
     }
 
+    // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Generate referral code
     const newReferralCode = generateReferralCode();
 
+    // Start database transaction
     client = await pool.connect();
 
     await client.query('BEGIN');
 
-    const userResult = await client.query(`
+    // Create user — NO OTP, NO EMAIL
+    const userResult = await client.query(
+      `
       INSERT INTO "User"
-      (email, name, mobile, password, referralcode, referredby, isverified, createdat)
+      (
+        email,
+        name,
+        mobile,
+        password,
+        referralcode,
+        referredby,
+        isverified,
+        createdat
+      )
       VALUES ($1, $2, $3, $4, $5, $6, true, NOW())
-      RETURNING id, email, name, mobile, role, referralcode, telegramid
-    `, [
-      email,
-      name,
-      mobile || null,
-      hashedPassword,
-      newReferralCode,
-      referralcode || null
-    ]);
+      RETURNING
+        id,
+        email,
+        name,
+        mobile,
+        role,
+        referralcode,
+        telegramid
+      `,
+      [
+        cleanEmail,
+        cleanName,
+        cleanMobile,
+        hashedPassword,
+        newReferralCode,
+        referralcode || null
+      ]
+    );
 
-    const u = userResult.rows[0];
+    const user = userResult.rows[0];
 
-    await client.query(`
+    // Create wallet
+    await client.query(
+      `
       INSERT INTO "Wallet"
-      (userid, usdtbalance, inrbalance, tokenbalance)
+      (
+        userid,
+        usdtbalance,
+        inrbalance,
+        tokenbalance
+      )
       VALUES ($1, 0, 0, 0)
-    `, [u.id]);
+      `,
+      [user.id]
+    );
 
-    await client.query(`
+    // Create rewards record
+    await client.query(
+      `
       INSERT INTO "Reward"
-      (userid, upirewardgiven, bankrewardgiven, telegramrewardgiven)
+      (
+        userid,
+        upirewardgiven,
+        bankrewardgiven,
+        telegramrewardgiven
+      )
       VALUES ($1, false, false, false)
-    `, [u.id]);
+      `,
+      [user.id]
+    );
 
+    // Commit transaction
     await client.query('COMMIT');
 
+    // Generate authentication token
     const token = jwt.sign(
-      { userId: u.id },
-      process.env.JWT_SECRET || 'zcrypto_premium_earning_fallback_secret_key_2026',
+      { userId: user.id },
+      process.env.JWT_SECRET ||
+        'zcrypto_premium_earning_fallback_secret_key_2026',
       {
         expiresIn: process.env.JWT_EXPIRES_IN || '7d'
       }
     );
 
+    console.log('Registration successful:', cleanEmail);
+
+    // Return token and user
     return res.status(201).json({
+      success: true,
       message: 'Registration successful',
       token,
       user: {
-        id: u.id,
-        email: u.email,
-        name: u.name,
-        mobile: u.mobile,
-        role: u.role,
-        referralCode: u.referralcode,
-        telegramId: u.telegramid
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        mobile: user.mobile,
+        role: user.role,
+        referralCode: user.referralcode,
+        telegramId: user.telegramid
       }
     });
 
   } catch (error) {
+
     if (client) {
       await client.query('ROLLBACK').catch(() => {});
     }
 
-    console.error('Register error:', error.message);
+    console.error('REGISTER FULL ERROR:', error);
+
+    // Duplicate email error
+    if (error.code === '23505') {
+      return res.status(400).json({
+        error: 'Email already registered. Please login.'
+      });
+    }
 
     return res.status(500).json({
       error: 'Registration failed',
@@ -112,13 +185,23 @@ const register = async (req, res) => {
     });
 
   } finally {
-    if (client) client.release();
+
+    if (client) {
+      client.release();
+    }
+
   }
 };
 
 
+// ============================================
+// LOGIN — EXISTING FUNCTIONALITY
+// ============================================
+
 const login = async (req, res) => {
+
   try {
+
     const { email, password } = req.body;
 
     if (!email || !password) {
@@ -127,9 +210,11 @@ const login = async (req, res) => {
       });
     }
 
+    const cleanEmail = email.trim().toLowerCase();
+
     const result = await pool.query(
-      'SELECT * FROM "User" WHERE email = $1',
-      [email]
+      'SELECT * FROM "User" WHERE LOWER(email) = $1',
+      [cleanEmail]
     );
 
     if (result.rows.length === 0) {
@@ -138,9 +223,9 @@ const login = async (req, res) => {
       });
     }
 
-    const u = result.rows[0];
+    const user = result.rows[0];
 
-    if (u.isblocked) {
+    if (user.isblocked) {
       return res.status(403).json({
         error: 'Account blocked'
       });
@@ -148,7 +233,7 @@ const login = async (req, res) => {
 
     const isValidPassword = await bcrypt.compare(
       password,
-      u.password
+      user.password
     );
 
     if (!isValidPassword) {
@@ -158,8 +243,9 @@ const login = async (req, res) => {
     }
 
     const token = jwt.sign(
-      { userId: u.id },
-      process.env.JWT_SECRET || 'zcrypto_premium_earning_fallback_secret_key_2026',
+      { userId: user.id },
+      process.env.JWT_SECRET ||
+        'zcrypto_premium_earning_fallback_secret_key_2026',
       {
         expiresIn: process.env.JWT_EXPIRES_IN || '7d'
       }
@@ -168,28 +254,36 @@ const login = async (req, res) => {
     return res.json({
       token,
       user: {
-        id: u.id,
-        email: u.email,
-        name: u.name,
-        mobile: u.mobile,
-        role: u.role,
-        referralCode: u.referralcode,
-        telegramId: u.telegramid
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        mobile: user.mobile,
+        role: user.role,
+        referralCode: user.referralcode,
+        telegramId: user.telegramid
       }
     });
 
   } catch (error) {
-    console.error('Login error:', error.message);
+
+    console.error('Login error:', error);
 
     return res.status(500).json({
       error: 'Login failed',
       detail: error.message
     });
+
   }
+
 };
 
 
+// ============================================
+// FORGOT PASSWORD — BREVO ONLY HERE
+// ============================================
+
 const forgetPassword = async (req, res) => {
+
   const { email } = req.body;
 
   if (!email) {
@@ -198,10 +292,13 @@ const forgetPassword = async (req, res) => {
     });
   }
 
+  const cleanEmail = email.trim().toLowerCase();
+
   try {
+
     const user = await pool.query(
-      'SELECT * FROM "User" WHERE email = $1',
-      [email]
+      'SELECT * FROM "User" WHERE LOWER(email) = $1',
+      [cleanEmail]
     );
 
     if (user.rows.length === 0) {
@@ -210,82 +307,75 @@ const forgetPassword = async (req, res) => {
       });
     }
 
-  } catch (err) {
-    console.error('User query error:', err.message);
+  } catch (error) {
+
+    console.error('Forgot password user query error:', error);
 
     return res.status(500).json({
       error: 'Failed to find user'
     });
+
   }
 
-  const crypto = require('crypto');
   const resetToken = crypto.randomBytes(32).toString('hex');
 
   try {
-    const checkTable = await pool.query(`
-      SELECT column_name
-      FROM information_schema.columns
-      WHERE table_name = 'PasswordReset'
-      AND column_name = 'token'
-    `);
 
-    if (checkTable.rows.length === 0) {
-      await pool.query(`
-        ALTER TABLE "PasswordReset"
-        ADD COLUMN token VARCHAR(255)
-      `);
-    }
-
-  } catch (e) {
-    console.log('Table schema check:', e.message);
-  }
-
-  try {
     await pool.query(
-      'DELETE FROM "PasswordReset" WHERE email = $1',
-      [email]
+      `
+      DELETE FROM "PasswordReset"
+      WHERE email = $1
+      `,
+      [cleanEmail]
     );
 
-    await pool.query(`
+    await pool.query(
+      `
       INSERT INTO "PasswordReset"
       (email, token, expiresat, createdat)
       VALUES ($1, $2, $3, NOW())
-    `, [
-      email,
-      resetToken,
-      new Date(Date.now() + 10 * 60 * 1000)
-    ]);
+      `,
+      [
+        cleanEmail,
+        resetToken,
+        new Date(Date.now() + 10 * 60 * 1000)
+      ]
+    );
 
-  } catch (e) {
-    console.error('PasswordReset insert error:', e.message);
+  } catch (error) {
+
+    console.error('PasswordReset insert error:', error);
 
     return res.status(500).json({
-      error: 'Failed to create password reset request'
+      error: 'Failed to create password reset request',
+      detail: error.message
     });
+
   }
 
   const frontendUrl =
     process.env.FRONTEND_URL || 'http://localhost:5173';
 
   const resetLink =
-    `${frontendUrl}/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`;
+    `${frontendUrl}/reset-password?token=${resetToken}&email=${encodeURIComponent(cleanEmail)}`;
 
-  const BREVO_API_KEY = process.env.BREVO_API_KEY || process.env.EMAIL_PASS;
+  const BREVO_API_KEY =
+    process.env.BREVO_API_KEY || process.env.EMAIL_PASS;
 
+  // Email is sent ONLY for password reset
   if (BREVO_API_KEY) {
+
     const senderEmail =
       process.env.EMAIL_FROM?.match(/<(.+)>/)?.[1] ||
       process.env.EMAIL_FROM ||
       'devxzenox@gmail.com';
-
-    const https = require('https');
 
     const data = JSON.stringify({
       sender: {
         name: 'Jex Pay',
         email: senderEmail
       },
-      to: [{ email }],
+      to: [{ email: cleanEmail }],
       subject: 'Reset Your Password - Jex Pay',
       htmlContent: `
         <div style="font-family:Arial,sans-serif;padding:20px">
@@ -313,57 +403,62 @@ const forgetPassword = async (req, res) => {
       }
     };
 
-    const req = https.request(options, (emailRes) => {
+    const emailRequest = https.request(options, (emailResponse) => {
+
       let responseBody = '';
 
-      emailRes.on('data', chunk => {
+      emailResponse.on('data', chunk => {
         responseBody += chunk;
       });
 
-      emailRes.on('end', () => {
-        console.log('Password reset email status:', emailRes.statusCode);
+      emailResponse.on('end', () => {
 
-        if (emailRes.statusCode !== 201) {
-          console.error('Password reset email failed:', responseBody);
+        console.log(
+          'Password reset email status:',
+          emailResponse.statusCode
+        );
+
+        if (emailResponse.statusCode !== 201) {
+          console.error(
+            'Password reset email failed:',
+            responseBody
+          );
         }
+
       });
+
     });
 
-    req.on('error', (e) => {
-      console.error('Password reset email error:', e.message);
+    emailRequest.on('error', (error) => {
+      console.error('Password reset email error:', error.message);
     });
 
-    req.write(data);
-    req.end();
+    emailRequest.write(data);
+    emailRequest.end();
+
+  } else {
+
+    console.error(
+      'BREVO_API_KEY missing: password reset email cannot be sent'
+    );
+
   }
 
   return res.json({
     message: 'Password reset link sent to your email'
   });
+
 };
 
 
+// ============================================
+// RESET PASSWORD — EXISTING FUNCTIONALITY
+// ============================================
+
 const resetPassword = async (req, res) => {
-  try {
-    const checkTable = await pool.query(`
-      SELECT column_name
-      FROM information_schema.columns
-      WHERE table_name = 'PasswordReset'
-      AND column_name = 'token'
-    `);
-
-    if (checkTable.rows.length === 0) {
-      await pool.query(`
-        ALTER TABLE "PasswordReset"
-        ADD COLUMN token VARCHAR(255)
-      `);
-    }
-
-  } catch (e) {
-    console.log('Schema check:', e.message);
-  }
 
   try {
+
     const { email, token, newPassword } = req.body;
 
     if (!email || !token || !newPassword) {
@@ -379,8 +474,12 @@ const resetPassword = async (req, res) => {
     }
 
     const resetRequest = await pool.query(
-      'SELECT * FROM "PasswordReset" WHERE email = $1 AND token = $2',
-      [email, token]
+      `
+      SELECT *
+      FROM "PasswordReset"
+      WHERE email = $1 AND token = $2
+      `,
+      [email.trim().toLowerCase(), token]
     );
 
     if (resetRequest.rows.length === 0) {
@@ -395,6 +494,7 @@ const resetPassword = async (req, res) => {
     const now = new Date(dbNow.rows[0].now);
 
     if (expiry < now) {
+
       await pool.query(
         'DELETE FROM "PasswordReset" WHERE email = $1',
         [email]
@@ -403,6 +503,7 @@ const resetPassword = async (req, res) => {
       return res.status(400).json({
         error: 'Token expired. Please request a new one.'
       });
+
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
@@ -422,15 +523,22 @@ const resetPassword = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Reset password error:', error.message);
+
+    console.error('Reset password error:', error);
 
     return res.status(500).json({
       error: 'Failed to reset password',
       detail: error.message
     });
+
   }
+
 };
 
+
+// ============================================
+// EXPORTS
+// ============================================
 
 module.exports = {
   register,
