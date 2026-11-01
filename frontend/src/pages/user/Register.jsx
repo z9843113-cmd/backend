@@ -19,9 +19,7 @@ const Register = () => {
 
   useEffect(() => {
     const refCode = searchParams.get('ref');
-    if (refCode) {
-      setReferralCode(refCode);
-    }
+    if (refCode) setReferralCode(refCode);
   }, [searchParams]);
 
   const validateForm = () => {
@@ -53,16 +51,17 @@ const Register = () => {
 
     try {
       const response = await authAPI.register({
-        name,
-        email,
-        mobile,
+        name: name.trim(),
+        email: email.trim().toLowerCase(),
+        mobile: mobile.trim(),
         password,
-        referralcode: referralCode
+        referralcode: referralCode.trim()
       });
 
-      // Direct registration: OTP not required
-      if (!response || !response.token || !response.user) {
-        throw new Error('Registration response is incomplete. Please try again.');
+      if (!response?.token || !response?.user) {
+        throw new Error(
+          'Account response incomplete. Please contact support.'
+        );
       }
 
       localStorage.setItem('token', response.token);
@@ -71,15 +70,26 @@ const Register = () => {
       setToken(response.token);
       setUser(response.user);
 
-      setSuccess('Registration successful!');
+      setSuccess('Account created successfully!');
 
       setTimeout(() => {
-        navigate('/home');
-      }, 1000);
+        navigate('/home', { replace: true });
+      }, 500);
 
     } catch (err) {
-      console.error('Registration error:', err);
-      setError(err.message || 'Registration failed. Please try again.');
+      console.error('REGISTER ERROR:', err.response?.data || err);
+
+      const serverError =
+        err.response?.data?.detail ||
+        err.response?.data?.error ||
+        err.response?.data?.message;
+
+      setError(
+        serverError ||
+        err.message ||
+        'Registration failed. Please try again.'
+      );
+
     } finally {
       setLoading(false);
     }
@@ -87,15 +97,12 @@ const Register = () => {
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] font-['Ubuntu',sans-serif] flex items-center justify-center p-3 sm:p-4">
-
       <div className="w-full max-w-md">
-
         <div className="relative overflow-hidden rounded-[28px] border border-[#3a3020] bg-[radial-gradient(circle_at_top_left,_rgba(212,175,55,0.18),_transparent_35%),linear-gradient(135deg,#171717_0%,#101010_60%,#090909_100%)] p-6 sm:p-8 shadow-[0_20px_80px_rgba(0,0,0,0.45)]">
 
           <div className="absolute -right-16 -top-16 h-40 w-40 rounded-full bg-[#D4AF37]/10 blur-3xl"></div>
 
           <div className="relative text-center mb-6 sm:mb-8">
-
             <img
               src="/jexpaylogo.png"
               alt="Jex Pay"
@@ -108,7 +115,6 @@ const Register = () => {
             >
               𝙅𝙀𝙓 𝙋𝘼𝙔
             </h1>
-
           </div>
 
           <h2 className="text-xl sm:text-2xl font-semibold text-white mb-5 sm:mb-6">
@@ -116,7 +122,7 @@ const Register = () => {
           </h2>
 
           {error && (
-            <div className="bg-red-500/10 border border-red-500/50 text-red-400 px-4 py-3 rounded-xl mb-4 font-medium text-sm">
+            <div className="bg-red-500/10 border border-red-500/50 text-red-400 px-4 py-3 rounded-xl mb-4 font-medium text-sm break-words">
               {error}
             </div>
           )}
@@ -127,12 +133,10 @@ const Register = () => {
             </div>
           )}
 
-          {/* Full Name */}
           <div className="mb-4">
             <label className="block text-sm text-gray-400 mb-2 ml-1">
               Full Name *
             </label>
-
             <input
               type="text"
               value={name}
@@ -145,12 +149,10 @@ const Register = () => {
             />
           </div>
 
-          {/* Email */}
           <div className="mb-4">
             <label className="block text-sm text-gray-400 mb-2 ml-1">
               Email *
             </label>
-
             <input
               type="email"
               value={email}
@@ -163,12 +165,10 @@ const Register = () => {
             />
           </div>
 
-          {/* Mobile Number */}
           <div className="mb-4">
             <label className="block text-sm text-gray-400 mb-2 ml-1">
               Mobile Number
             </label>
-
             <input
               type="tel"
               value={mobile}
@@ -181,12 +181,10 @@ const Register = () => {
             />
           </div>
 
-          {/* Password */}
           <div className="mb-4">
             <label className="block text-sm text-gray-400 mb-2 ml-1">
               Password *
             </label>
-
             <input
               type="password"
               value={password}
@@ -199,15 +197,10 @@ const Register = () => {
             />
           </div>
 
-          {/* Referral Code */}
           <div className="mb-6">
             <label className="block text-sm text-gray-400 mb-2 ml-1">
-              Referral Code{' '}
-              {searchParams.get('ref')
-                ? <span className="text-emerald-400">(Auto-filled!)</span>
-                : '(Optional)'}
+              Referral Code (Optional)
             </label>
-
             <input
               type="text"
               value={referralCode}
@@ -220,7 +213,6 @@ const Register = () => {
             />
           </div>
 
-          {/* Register Button */}
           <button
             onClick={handleRegister}
             disabled={loading}
@@ -238,7 +230,6 @@ const Register = () => {
               Login
             </Link>
           </p>
-
         </div>
       </div>
     </div>
